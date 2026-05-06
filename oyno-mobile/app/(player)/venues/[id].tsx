@@ -1,16 +1,15 @@
 import { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Image, Platform, Dimensions, SafeAreaView, FlatList,
+  View, Text, ScrollView, TouchableOpacity, TextInput,
+  StyleSheet, Image, Platform, Dimensions, Linking, ActivityIndicator,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import Toast from 'react-native-toast-message';
 import {
-  ArrowLeft, MapPin, Star, Clock, ChevronRight,
-  Users, Shield, Zap,
+  ArrowLeft, MapPin, Star, Clock, Zap, Navigation, Send,
 } from 'lucide-react-native';
-import { venuesApi, bookingsApi } from '@/services/api';
+import { venuesApi } from '@/services/api';
 import { COLORS, FONTS, RADIUS, SPACING, SHADOW } from '@/constants/theme';
 import { TimeSlot } from '@/types';
 
@@ -21,10 +20,13 @@ const { width } = Dimensions.get('window');
 
 export default function VenueDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const qc = useQueryClient();
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().split('T')[0]
   );
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewText, setReviewText] = useState('');
 
   const { data: venueRes, isLoading } = useQuery({
     queryKey: ['venue', id],
@@ -37,8 +39,56 @@ export default function VenueDetailScreen() {
     enabled: !!id,
   });
 
+  const { data: reviewsRes } = useQuery({
+    queryKey: ['reviews', id],
+    queryFn: () => venuesApi.reviews(Number(id)),
+    enabled: !!id,
+  });
+  const reviews = reviewsRes?.data ?? [];
+
+  const { mutate: submitReview, isPending: submittingReview } = useMutation({
+    mutationFn: () => venuesApi.addReview(Number(id), { rating: reviewRating, text: reviewText.trim() }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['reviews', id] });
+      qc.invalidateQueries({ queryKey: ['venue', id] });
+      setReviewText('');
+      Toast.show({ type: 'success', text1: 'Отзыв добавлен!' });
+    },
+    onError: (e: any) => {
+      const msg = e?.response?.data?.non_field_errors?.[0] ?? 'Ошибка при добавлении отзыва';
+      Toast.show({ type: 'error', text1: msg });
+    },
+  });
+
   const venue = venueRes?.data;
-  const slots = slotsRes?.data ?? [];
+  const slots = (slotsRes?.data as any) ?? [];
+
+  const openInMaps = () => {
+    if (!venue) return;
+    const lat = parseFloat(String(venue.lat));
+    const lng = parseFloat(String(venue.lng));
+    const encodedAddress = encodeURIComponent(venue.address);
+
+    const hasCoords = !isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0);
+
+    if (hasCoords) {
+      // 2GIS app: строим маршрут до точки
+      const url2gisRoute = `dgis://2gis.ru/routeSearch/rsType/car/to/${lng},${lat}`;
+      // 2GIS web fallback
+      const url2gisWeb = `https://2gis.ru/directions/auto/to/${lat}%2C${lng}`;
+      Linking.canOpenURL(url2gisRoute)
+        .then((supported) => Linking.openURL(supported ? url2gisRoute : url2gisWeb))
+        .catch(() => Linking.openURL(`https://2gis.ru/search/${encodedAddress}`));
+    } else {
+      // Нет координат — ищем по адресу владельца
+      const url2gisSearch = `dgis://2gis.ru/search/${encodedAddress}`;
+      Linking.canOpenURL(url2gisSearch)
+        .then((supported) =>
+          Linking.openURL(supported ? url2gisSearch : `https://2gis.ru/search/${encodedAddress}`)
+        )
+        .catch(() => {});
+    }
+  };
 
   // 5 ближайших дней
   const dates = Array.from({ length: 5 }, (_, i) => {
@@ -60,11 +110,18 @@ export default function VenueDetailScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Hero Image */}
         <View style={styles.hero}>
-          <Image
-            source={{ uri: venue.images?.[0] ?? 'https://via.placeholder.com/400x250' }}
-            style={styles.heroImage}
-            resizeMode="cover"
-          />
+          {venue.images?.[0] ? (
+            <Image
+              source={{ uri: venue.images[0] }}
+              style={styles.heroImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={[styles.heroImage, styles.heroPlaceholder]}>
+              <Text style={styles.heroPlaceholderEmoji}>🏟️</Text>
+              <Text style={styles.heroPlaceholderText}>{venue.name}</Text>
+            </View>
+          )}
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
             <ArrowLeft size={24} color="#fff" />
           </TouchableOpacity>
@@ -127,32 +184,77 @@ export default function VenueDetailScreen() {
             </View>
           )}
 
-          {/* 2GIS Map */}
+          {/* Map button */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>НА КАРТЕ</Text>
-            <View style={styles.mapContainer}>
-              <MapView
-                style={styles.map}
-                provider={PROVIDER_GOOGLE}
-                // Для 2GIS: заменить на кастомный TileOverlay с тайлами 2GIS
-                initialRegion={{
-                  latitude: venue.lat,
-                  longitude: venue.lng,
-                  latitudeDelta: 0.01,
-                  longitudeDelta: 0.01,
-                }}
-              >
-                <Marker
-                  coordinate={{ latitude: venue.lat, longitude: venue.lng }}
-                  title={venue.name}
-                  description={venue.address}
+            <TouchableOpacity style={styles.mapBtn} onPress={openInMaps} activeOpacity={0.85}>
+              <View style={styles.mapBtnIcon}>
+                <Navigation size={24} color="#000" />
+              </View>
+              <View style={styles.mapBtnInfo}>
+                <Text style={styles.mapBtnTitle}>Открыть маршрут</Text>
+                <Text style={styles.mapBtnAddr} numberOfLines={1}>{venue.address}</Text>
+              </View>
+              <MapPin size={20} color={COLORS.accent} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Reviews */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>ОТЗЫВЫ</Text>
+
+            {/* Add review */}
+            <View style={styles.reviewForm}>
+              <View style={styles.starsRow}>
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <TouchableOpacity key={s} onPress={() => setReviewRating(s)} activeOpacity={0.7}>
+                    <Star
+                      size={28}
+                      color={COLORS.accent}
+                      fill={s <= reviewRating ? COLORS.accent : 'transparent'}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.reviewInputRow}>
+                <TextInput
+                  style={styles.reviewInput}
+                  placeholder="Напиши отзыв..."
+                  placeholderTextColor={COLORS.gray[600]}
+                  value={reviewText}
+                  onChangeText={setReviewText}
+                  multiline
+                />
+                <TouchableOpacity
+                  style={styles.reviewSendBtn}
+                  onPress={() => submitReview()}
+                  disabled={submittingReview}
+                  activeOpacity={0.85}
                 >
-                  <View style={styles.markerPin}>
-                    <MapPin size={20} color="#000" />
-                  </View>
-                </Marker>
-              </MapView>
+                  {submittingReview
+                    ? <ActivityIndicator size="small" color="#000" />
+                    : <Send size={18} color="#000" />}
+                </TouchableOpacity>
+              </View>
             </View>
+
+            {/* Reviews list */}
+            {reviews.length === 0 ? (
+              <Text style={styles.emptySlots}>Пока нет отзывов</Text>
+            ) : (
+              reviews.map((r) => (
+                <View key={r.id} style={styles.reviewCard}>
+                  <View style={styles.reviewCardTop}>
+                    <Text style={styles.reviewAuthor}>{r.author_name}</Text>
+                    <View style={styles.reviewStarsBadge}>
+                      <Star size={10} color={COLORS.accent} fill={COLORS.accent} />
+                      <Text style={styles.reviewRatingText}>{r.rating}</Text>
+                    </View>
+                  </View>
+                  {r.text ? <Text style={styles.reviewText}>{r.text}</Text> : null}
+                </View>
+              ))
+            )}
           </View>
 
           {/* Date Picker */}
@@ -340,19 +442,140 @@ const styles = StyleSheet.create({
   },
   amenityText: { fontFamily: FONTS.boldItalic, fontSize: 11, color: COLORS.gray[400] },
 
-  // Map
-  mapContainer: {
+  // Hero placeholder
+  heroPlaceholder: {
+    backgroundColor: COLORS.bgCard,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  heroPlaceholderEmoji: { fontSize: 64, marginBottom: 8 },
+  heroPlaceholderText: {
+    fontFamily: FONTS.blackItalic,
+    fontSize: 16,
+    color: COLORS.white,
+    textTransform: 'uppercase',
+    letterSpacing: -0.5,
+  },
+
+  // Map button
+  mapBtn: {
+    backgroundColor: COLORS.bgCard,
     borderRadius: RADIUS.xl,
-    overflow: 'hidden',
     borderWidth: 1,
     borderColor: COLORS.border,
+    padding: SPACING.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    ...SHADOW.card,
   },
-  map: { width: '100%', height: 200 },
-  markerPin: {
+  mapBtnIcon: {
+    width: 52,
+    height: 52,
     backgroundColor: COLORS.accent,
-    borderRadius: RADIUS.full,
-    padding: 6,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
     ...SHADOW.accent,
+  },
+  mapBtnInfo: { flex: 1 },
+  mapBtnTitle: {
+    fontFamily: FONTS.blackItalic,
+    fontSize: 14,
+    color: COLORS.white,
+    textTransform: 'uppercase',
+  },
+  mapBtnAddr: {
+    fontFamily: FONTS.boldItalic,
+    fontSize: 11,
+    color: COLORS.gray[500],
+    marginTop: 3,
+  },
+
+  // Reviews
+  reviewForm: {
+    backgroundColor: COLORS.bgCard,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    gap: SPACING.sm,
+  },
+  starsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  reviewInputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: SPACING.sm,
+  },
+  reviewInput: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 10,
+    color: COLORS.white,
+    fontFamily: FONTS.bold,
+    fontSize: 13,
+    minHeight: 44,
+    maxHeight: 80,
+  },
+  reviewSendBtn: {
+    width: 44,
+    height: 44,
+    backgroundColor: COLORS.accent,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...SHADOW.accent,
+  },
+  reviewCard: {
+    backgroundColor: COLORS.bgCard,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: SPACING.md,
+    marginBottom: 8,
+  },
+  reviewCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  reviewAuthor: {
+    fontFamily: FONTS.blackItalic,
+    fontSize: 13,
+    color: COLORS.white,
+    textTransform: 'uppercase',
+    letterSpacing: -0.3,
+  },
+  reviewStarsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(198,255,0,0.1)',
+    borderRadius: RADIUS.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  reviewRatingText: {
+    fontFamily: FONTS.blackItalic,
+    fontSize: 11,
+    color: COLORS.accent,
+  },
+  reviewText: {
+    fontFamily: FONTS.boldItalic,
+    fontSize: 12,
+    color: COLORS.gray[400],
+    lineHeight: 18,
   },
 
   // Dates

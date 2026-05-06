@@ -1,10 +1,10 @@
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Platform, Image,
+  StyleSheet, Platform, Linking,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, MapPin, Clock, Calendar, Users, ShieldCheck, MessageCircle } from 'lucide-react-native';
+import { ArrowLeft, MapPin, Clock, Calendar, Users, ShieldCheck, MessageCircle, Navigation } from 'lucide-react-native';
 import Toast from 'react-native-toast-message';
 import { gamesApi } from '@/services/api';
 import { COLORS, FONTS, RADIUS, SPACING, SHADOW } from '@/constants/theme';
@@ -29,6 +29,18 @@ export default function GameDetailScreen() {
   });
 
   const game = data?.data;
+
+  const openInMaps = () => {
+    if (!game?.venue) return;
+    const lat = parseFloat(String(game.venue.lat));
+    const lng = parseFloat(String(game.venue.lng));
+    if (isNaN(lat) || isNaN(lng)) return;
+    const url2gis = `dgis://2gis.ru/geo/${lng},${lat}`;
+    const urlWeb = `https://2gis.ru/geo/${lng},${lat}`;
+    Linking.canOpenURL(url2gis).then((supported) => {
+      Linking.openURL(supported ? url2gis : urlWeb);
+    });
+  };
 
   if (isLoading || !game) {
     return (
@@ -93,7 +105,10 @@ export default function GameDetailScreen() {
               <Text style={styles.venueCardTitle}>ЛОКАЦИЯ</Text>
             </View>
             <Text style={styles.venueName}>{game.venue?.name}</Text>
-            <Text style={styles.venueAddress}>{game.venue?.address}</Text>
+            <TouchableOpacity style={styles.addressRow} onPress={openInMaps} activeOpacity={0.7}>
+              <Navigation size={12} color={COLORS.accent} />
+              <Text style={styles.venueAddress}>{game.venue?.address}</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Description */}
@@ -205,8 +220,9 @@ const styles = StyleSheet.create({
   },
   venueCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: SPACING.sm },
   venueCardTitle: { fontFamily: FONTS.blackItalic, fontSize: 10, color: COLORS.white, textTransform: 'uppercase', letterSpacing: 2 },
-  venueName: { fontFamily: FONTS.boldItalic, fontSize: 14, color: COLORS.gray[200] },
-  venueAddress: { fontFamily: FONTS.boldItalic, fontSize: 11, color: COLORS.gray[500], marginTop: 2 },
+  venueName: { fontFamily: FONTS.boldItalic, fontSize: 14, color: COLORS.white },
+  addressRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
+  venueAddress: { fontFamily: FONTS.boldItalic, fontSize: 11, color: COLORS.accent, textDecorationLine: 'underline', flex: 1 },
   description: { fontFamily: FONTS.boldItalic, fontSize: 13, color: COLORS.gray[400], lineHeight: 20 },
 
   footer: {

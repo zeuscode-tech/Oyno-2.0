@@ -27,6 +27,28 @@ class VenueViewSet(ModelViewSet):
             return VenueCreateSerializer
         return VenueListSerializer
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            print("VALIDATION ERRORS:", serializer.errors)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        venue = serializer.save()
+        
+       
+        images = request.FILES.getlist('images')
+        from .models import VenueImage
+        for idx, img in enumerate(images):
+            VenueImage.objects.create(
+                venue=venue,
+                image=img,
+                is_main=(idx == 0),
+                order=idx
+            )
+            
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
     def get_permissions(self):
         if self.action in ("list", "retrieve"):
             return [permissions.IsAuthenticatedOrReadOnly()]

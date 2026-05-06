@@ -5,7 +5,11 @@ import { WSMessage, WSChatMessage } from '@/types';
 // Django Channels используют стандартный WebSocket (не socket.io).
 // Этот файл — обёртка над нативным WebSocket для Django Channels.
 
-const WS_BASE = 'wss://api.oyno.app/ws';  // замени на свой URL
+const rawApi = process.env.EXPO_PUBLIC_API_URL?.trim() ?? 'http://localhost:8080/api/v1';
+const WS_BASE = rawApi
+  .replace(/^https/, 'wss')
+  .replace(/^http/, 'ws')
+  .replace(/\/api\/v1\/?$/, '/ws');
 const TOKEN_KEY = 'oyno_tokens';
 
 type MessageHandler = (msg: WSChatMessage) => void;

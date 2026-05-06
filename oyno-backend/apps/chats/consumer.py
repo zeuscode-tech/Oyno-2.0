@@ -81,8 +81,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 "room_id": event["room_id"],
                 "sender_id": event["sender_id"],
                 "sender_name": event["sender_name"],
-                "sender_avatar": event["sender_avatar"],
-                "text": event["text"],
+                "sender_avatar": event.get("sender_avatar"),
+                "text": event.get("text", ""),
+                "media_url": event.get("media_url"),
+                "media_type": event.get("media_type", "text"),
                 "created_at": event["created_at"],
             },
         }))

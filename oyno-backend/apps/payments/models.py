@@ -18,7 +18,7 @@ class PaymentMethod(models.Model):
     type = models.CharField(max_length=20, choices=MethodType.choices)
     last4 = models.CharField(max_length=4)
     label = models.CharField(max_length=50)  # "Visa •••• 4242"
-    token = models.TextField()  # токен от платёжного шлюза (зашифрован)
+    token = models.TextField(blank=True, default="")  # токен от платёжного шлюза (зашифрован)
     is_default = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 

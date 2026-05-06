@@ -34,6 +34,7 @@ class Venue(models.Model):
     reviews_count = models.PositiveIntegerField(default=0)
     price_per_hour = models.DecimalField(max_digits=8, decimal_places=2, default=0)
     description = models.TextField(blank=True)
+    link_2gis = models.URLField("Ссылка на 2ГИС", max_length=500, blank=True)
     amenities = models.JSONField(default=list)  # ["Душевые", "Парковка", ...]
     working_hours = models.JSONField(
         default=dict  # {"open": "08:00", "close": "22:00", "days": [1,2,3,4,5,6,7]}
@@ -101,3 +102,4 @@ class VenueReview(models.Model):
         self.venue.rating = round(agg["avg"] or 0, 1)
         self.venue.reviews_count = VenueReview.objects.filter(venue=self.venue).count()
         self.venue.save(update_fields=["rating", "reviews_count"])
+    

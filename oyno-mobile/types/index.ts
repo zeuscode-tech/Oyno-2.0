@@ -1,17 +1,24 @@
 // ── Auth ─────────────────────────────────────────────
 export type UserRole = 'player' | 'venue_owner';
 
+export type SkillLevelValue = 'beginner' | 'intermediate' | 'advanced' | 'pro';
+export type MainSport = 'football' | 'basketball' | 'volleyball' | 'tennis' | 'other';
+
 export interface User {
   id: number;
   name: string;
+  username?: string;
   phone: string;
   avatar: string | null;
   city: string;
+  bio: string;
   role: UserRole;
   rating: number;
   reliability: number;
   matches_played: number;
   rank: string;
+  skill_level: SkillLevelValue;
+  main_sport: MainSport | '';
   created_at: string;
 }
 
@@ -29,10 +36,11 @@ export interface RegisterPayload {
   name: string;
   phone: string;
   password: string;
+  role?: UserRole;
 }
 
 // ── Sports ───────────────────────────────────────────
-export type SportId = 'football' | 'basketball' | 'volleyball' | 'tennis' | 'swimming' | 'all';
+export type SportId = 'football' | 'basketball' | 'volleyball' | 'tennis' | 'all';
 
 export interface Sport {
   id: SportId;
@@ -65,7 +73,7 @@ export interface CreateGamePayload {
   sport_id: SportId;
   venue_id: number;
   date_time: string;
-  duration: number;
+  duration: number;   // часы: 1.5 = 90 мин
   players_needed: number;
   level: SkillLevel;
   description?: string;
@@ -95,9 +103,11 @@ export interface Venue {
   reviews_count: number;
   price_per_hour: number;
   images: string[];
+  is_active: boolean;
+  link_2gis?: string;
   owner_id: number;
-  description: string;
-  amenities: string[];
+  description?: string;
+  amenities?: string[];
   working_hours: WorkingHours;
 }
 
@@ -139,14 +149,20 @@ export interface CreateBookingPayload {
 // ── Chats ────────────────────────────────────────────
 export type ChatType = 'game' | 'direct' | 'venue';
 
+export type MediaType = 'text' | 'image' | 'video' | 'audio';
+
 export interface ChatRoom {
   id: number;
   type: ChatType;
   title: string;
-  avatar: string | null;
+  avatar_url: string | null;
   last_message: ChatMessage | null;
   unread_count: number;
+  organizer_id: number | null;
   participants: Pick<User, 'id' | 'name' | 'avatar'>[];
+  game_date_time: string | null;
+  game_duration: number | null;
+  game_status: string | null;
 }
 
 export interface ChatMessage {
@@ -154,6 +170,8 @@ export interface ChatMessage {
   room_id: number;
   sender: Pick<User, 'id' | 'name' | 'avatar'>;
   text: string;
+  media_url: string | null;
+  media_type: MediaType;
   created_at: string;
   is_me: boolean;
 }
@@ -212,5 +230,7 @@ export interface WSChatMessage {
   sender_name: string;
   sender_avatar: string | null;
   text: string;
+  media_url: string | null;
+  media_type: MediaType;
   created_at: string;
 }

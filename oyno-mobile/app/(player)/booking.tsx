@@ -34,8 +34,11 @@ export default function BookingScreen() {
   });
 
   const venue = venueRes?.data;
-  const slot = slotsRes?.data?.find((s) => String(s.id) === slot_id);
-  const methods: PaymentMethod[] = methodsRes?.data ?? [];
+  const rawSlots = slotsRes?.data as any;
+  const slotsArray = Array.isArray(rawSlots) ? rawSlots : (rawSlots?.results ?? []);
+  const slot = slotsArray.find((s: any) => String(s.id) === String(slot_id));
+  const rawMethods = methodsRes?.data as any;
+  const methods: PaymentMethod[] = Array.isArray(rawMethods) ? rawMethods : (rawMethods?.results ?? []);
   const isLoading = venueLoading || slotsLoading || methodsLoading;
 
   const { mutate: book, isPending } = useMutation({
@@ -93,7 +96,7 @@ export default function BookingScreen() {
           <View style={styles.infoCard}>
             <Text style={styles.infoLabel}>ВРЕМЯ</Text>
             <Text style={styles.infoValue}>
-              {slot.start_time.slice(0, 5)} – {slot.end_time.slice(0, 5)}
+              {slot.start_time?.slice(0, 5)} – {slot.end_time?.slice(0, 5)}
             </Text>
             <Text style={styles.infoSub}>Стоимость: {slot.price} сом</Text>
           </View>

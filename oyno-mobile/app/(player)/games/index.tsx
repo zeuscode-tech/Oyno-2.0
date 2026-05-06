@@ -43,19 +43,23 @@ export default function GamesScreen() {
   const myGames = myData?.data?.results ?? [];
 
   const filtered = useMemo(() => {
-    const base = tab === 'history'
-      ? myGames.filter((g) => g.status === 'completed')
-      : tab === 'upcoming'
-      ? myGames.filter((g) => g.is_joined && g.status !== 'completed')
-      : allGames;
+    const now = new Date();
 
-    return base.filter((g) => {
-      const matchSearch =
-        g.title.toLowerCase().includes(search.toLowerCase()) ||
-        g.venue?.name.toLowerCase().includes(search.toLowerCase());
-      const matchSport = sportFilter === 'Все' || g.sport_id === SPORT_NAME_TO_ID[sportFilter];
-      return matchSearch && matchSport;
-    });
+    const base = tab === 'history'
+      ? myGames.filter((g) => g.status === 'completed' || new Date(g.date_time) < now)
+      : tab === 'upcoming'
+      ? myGames.filter((g) => g.is_joined && g.status !== 'completed' && new Date(g.date_time) >= now)
+      : allGames.filter((g) => new Date(g.date_time) >= now && g.status !== 'completed' && g.status !== 'cancelled');
+
+    return base
+      .filter((g) => {
+        const matchSearch =
+          g.title.toLowerCase().includes(search.toLowerCase()) ||
+          g.venue?.name.toLowerCase().includes(search.toLowerCase());
+        const matchSport = sportFilter === 'Все' || g.sport_id === SPORT_NAME_TO_ID[sportFilter];
+        return matchSearch && matchSport;
+      })
+      .sort((a, b) => new Date(a.date_time).getTime() - new Date(b.date_time).getTime());
   }, [tab, search, sportFilter, allGames, myGames]);
 
   return (

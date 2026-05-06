@@ -31,13 +31,23 @@ class ChatRoom(models.Model):
 
 
 class ChatMessage(models.Model):
+    class MediaType(models.TextChoices):
+        TEXT = 'text', 'Текст'
+        IMAGE = 'image', 'Изображение'
+        VIDEO = 'video', 'Видео'
+        AUDIO = 'audio', 'Голосовое'
+
     room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE, related_name="messages")
     sender = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="sent_messages",
     )
-    text = models.TextField()
+    text = models.TextField(blank=True, default="")
+    media_file = models.FileField(upload_to='chat_media/', null=True, blank=True)
+    media_type = models.CharField(
+        max_length=10, choices=MediaType.choices, default=MediaType.TEXT
+    )
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 

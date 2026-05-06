@@ -10,6 +10,9 @@ class PaymentMethodSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data: dict) -> PaymentMethod:
         validated_data["user"] = self.context["request"].user
+        # При первой карте — делаем её дефолтной
+        if not PaymentMethod.objects.filter(user=validated_data["user"]).exists():
+            validated_data["is_default"] = True
         return super().create(validated_data)
 
 

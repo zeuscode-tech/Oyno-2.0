@@ -8,7 +8,7 @@ from .models import User
 from .serializers import (
     RegisterSerializer, LoginSerializer, UserSerializer,
     OTPSendSerializer, OTPVerifySerializer, UpdateProfileSerializer,
-    TokenPairSerializer,
+    TokenPairSerializer, PasswordResetRequestSerializer, PasswordResetConfirmSerializer,
 )
 from .services import create_otp, verify_otp
 
@@ -107,3 +107,54 @@ class FCMTokenView(APIView):
             request.user.fcm_token = token
             request.user.save(update_fields=["fcm_token"])
         return Response({"detail": "OK"})
+
+
+class PasswordResetRequestView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        phone = serializer.validated_data["phone"]
+        from .services import create_otp
+        create_otp(phone)
+        return Response({"detail": "Код отправлен на ваш номер."})
+
+
+class PasswordResetConfirmView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        phone = serializer.validated_data["phone"]
+        code = serializer.validated_data["code"]
+        new_password = serializer.validated_data["new_password"]
+
+        from .services import verify_otp
+        if not verify_otp(phone, code):
+            return Response(
+                {"detail": "Неверный или истёкший код."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = User.objects.get(phone=phone)
+        user.set_password(new_password)
+        user.save(update_fields=["password"])
+        return Response({"detail": "Пароль успешно изменён."})
+
+
+class UserSearchView(generics.ListAPIView):
+    """GET /auth/users/search/?username=xxx — поиск пользователей по username."""
+    serializer_class = UserSerializer
+
+    def get_queryset(self):
+        q = self.request.query_params.get("username", "").strip()
+        if not q:
+            return User.objects.none()
+        return (
+            User.objects
+            .filter(username__icontains=q, is_active=True)
+            .exclude(id=self.request.user.id)
+            .order_by("username")[:20]
+        )

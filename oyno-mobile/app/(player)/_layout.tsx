@@ -45,7 +45,7 @@ export default function PlayerLayout() {
         }}
       />
       <Tabs.Screen
-        name="games"
+        name="games/index"
         options={{
           tabBarIcon: ({ focused }) => (
             <TabIcon icon={CalendarDays} label={t('nav.games')} focused={focused} />
@@ -53,7 +53,7 @@ export default function PlayerLayout() {
         }}
       />
       <Tabs.Screen
-        name="chats"
+        name="chats/index"
         options={{
           tabBarIcon: ({ focused }) => (
             <TabIcon icon={MessageCircle} label={t('nav.chats')} focused={focused} />
@@ -68,14 +68,11 @@ export default function PlayerLayout() {
           ),
         }}
       />
-      {/* booking is a full-screen flow, not a tab */}
-      <Tabs.Screen
-        name="booking"
-        options={{
-          href: null,
-          tabBarButton: () => null,
-        }}
-      />
+      {/* скрытые маршруты — не отображаются в таб-баре */}
+      <Tabs.Screen name="booking" options={{ href: null }} />
+      <Tabs.Screen name="venues/[id]" options={{ href: null }} />
+      <Tabs.Screen name="games/[id]" options={{ href: null }} />
+      <Tabs.Screen name="chats/[id]" options={{ href: null }} />
     </Tabs>
   );
 }

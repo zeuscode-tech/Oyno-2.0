@@ -3,16 +3,25 @@ import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
+import { Eye, EyeOff } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
 import Toast from 'react-native-toast-message';
 import { authApi } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 import { COLORS, FONTS, RADIUS, SPACING, SHADOW } from '@/constants/theme';
-import { RegisterPayload } from '@/types';
+import { RegisterPayload, UserRole } from '@/types';
 
-function normalizePhone(input: string): string {
-  return input.replace(/\s+/g, '').trim();
+const PHONE_PREFIX = '+996';
+
+function handlePhoneInput(val: string, setPhone: (v: string) => void) {
+  if (!val.startsWith(PHONE_PREFIX)) {
+    const digits = val.replace(/\D/g, '').slice(0, 9);
+    setPhone(PHONE_PREFIX + digits);
+    return;
+  }
+  const after = val.slice(PHONE_PREFIX.length).replace(/\D/g, '').slice(0, 9);
+  setPhone(PHONE_PREFIX + after);
 }
 
 function extractRegisterError(e: any): string {
@@ -45,8 +54,10 @@ function extractRegisterError(e: any): string {
 
 export default function RegisterScreen() {
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState(PHONE_PREFIX);
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [role, setRole] = useState<UserRole>('player');
   const { setUser, setTokens } = useAuthStore();
 
   const { mutate: register, isPending } = useMutation({
@@ -54,7 +65,11 @@ export default function RegisterScreen() {
     onSuccess: async ({ data }) => {
       setUser(data.user);
       await setTokens(data.tokens);
-      router.replace('/(player)');
+      if (data.user.role === 'venue_owner') {
+        router.replace('/(owner)');
+      } else {
+        router.replace('/(player)');
+      }
     },
     onError: (e: any) => {
       Toast.show({ type: 'error', text1: extractRegisterError(e) });
@@ -63,11 +78,15 @@ export default function RegisterScreen() {
 
   const onRegisterPress = () => {
     const preparedName = name.trim();
-    const preparedPhone = normalizePhone(phone);
     const preparedPassword = password.trim();
 
-    if (!preparedName || !preparedPhone || !preparedPassword) {
+    if (!preparedName || !preparedPassword) {
       Toast.show({ type: 'error', text1: 'Заполни все поля.' });
+      return;
+    }
+
+    if (phone.length < PHONE_PREFIX.length + 9) {
+      Toast.show({ type: 'error', text1: 'Введи 9 цифр номера телефона' });
       return;
     }
 
@@ -78,8 +97,9 @@ export default function RegisterScreen() {
 
     register({
       name: preparedName,
-      phone: preparedPhone,
+      phone,
       password: preparedPassword,
+      role,
     });
   };
 
@@ -92,6 +112,28 @@ export default function RegisterScreen() {
         <View style={styles.logoBlock}>
           <Text style={styles.logo}>OYNO</Text>
           <Text style={styles.logoSub}>РЕГИСТРАЦИЯ</Text>
+        </View>
+
+        {/* Role selector */}
+        <View style={styles.roleRow}>
+          <TouchableOpacity
+            style={[styles.roleBtn, role === 'player' && styles.roleBtnActive]}
+            onPress={() => setRole('player')}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.roleBtnText, role === 'player' && styles.roleBtnTextActive]}>
+              ⚽ Я ИГРОК
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.roleBtn, role === 'venue_owner' && styles.roleBtnActive]}
+            onPress={() => setRole('venue_owner')}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.roleBtnText, role === 'venue_owner' && styles.roleBtnTextActive]}>
+              🏟 ВЛАДЕЛЕЦ ПОЛЯ
+            </Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.form}>
@@ -111,20 +153,31 @@ export default function RegisterScreen() {
             placeholder="+996 700 000 000"
             placeholderTextColor={COLORS.gray[600]}
             value={phone}
-            onChangeText={setPhone}
+            onChangeText={(v) => handlePhoneInput(v, setPhone)}
             keyboardType="phone-pad"
             autoComplete="tel"
           />
 
           <Text style={[styles.label, { marginTop: SPACING.md }]}>ПАРОЛЬ</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Минимум 8 символов"
-            placeholderTextColor={COLORS.gray[600]}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
+          <View style={styles.inputWrapper}>
+            <TextInput
+              style={[styles.input, { paddingRight: 56, marginBottom: 0 }]}
+              placeholder="Минимум 8 символов"
+              placeholderTextColor={COLORS.gray[600]}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+            />
+            <TouchableOpacity
+              style={styles.eyeBtn}
+              onPress={() => setShowPassword((v) => !v)}
+              activeOpacity={0.7}
+            >
+              {showPassword
+                ? <EyeOff size={20} color={COLORS.gray[500]} />
+                : <Eye size={20} color={COLORS.gray[500]} />}
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity
             style={[styles.btnAccent, isPending && styles.btnDisabled]}
@@ -155,7 +208,7 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bg },
   inner: { flexGrow: 1, padding: SPACING.lg, justifyContent: 'center' },
-  logoBlock: { alignItems: 'center', marginBottom: SPACING.xxl },
+  logoBlock: { alignItems: 'center', marginBottom: SPACING.xl },
   logo: {
     fontFamily: FONTS.blackItalic,
     fontSize: 72,
@@ -170,7 +223,49 @@ const styles = StyleSheet.create({
     letterSpacing: 4,
     marginTop: 4,
   },
+
+  // Role toggle
+  roleRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginBottom: SPACING.lg,
+  },
+  roleBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: RADIUS.lg,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.bgCard,
+    alignItems: 'center',
+  },
+  roleBtnActive: {
+    borderColor: COLORS.accent,
+    backgroundColor: 'rgba(198,255,0,0.08)',
+    ...SHADOW.accent,
+  },
+  roleBtnText: {
+    fontFamily: FONTS.blackItalic,
+    fontSize: 10,
+    color: COLORS.gray[500],
+    letterSpacing: 1,
+  },
+  roleBtnTextActive: {
+    color: COLORS.accent,
+  },
+
   form: { gap: 4 },
+  inputWrapper: {
+    position: 'relative',
+    marginBottom: 4,
+  },
+  eyeBtn: {
+    position: 'absolute',
+    right: 16,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+  },
   label: {
     fontFamily: FONTS.blackItalic,
     fontSize: 10,

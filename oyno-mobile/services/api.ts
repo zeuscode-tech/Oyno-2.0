@@ -18,12 +18,16 @@ const api: AxiosInstance = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// ── Request interceptor: attach JWT ────────────────
+// ── Request interceptor: attach JWT + fix FormData headers ─────────────
 api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   const raw = await SecureStore.getItemAsync(TOKEN_KEY);
   if (raw) {
     const tokens: AuthTokens = JSON.parse(raw);
     config.headers.Authorization = `Bearer ${tokens.access}`;
+  }
+  // For FormData let the runtime set Content-Type with boundary automatically
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type'];
   }
   return config;
 });
@@ -75,8 +79,25 @@ export const authApi = {
   updateProfile: (data: Partial<User>) =>
     api.patch<User>('/auth/me/', data),
 
+  uploadAvatar: (uri: string) => {
+    const form = new FormData();
+    const filename = uri.split('/').pop() ?? 'avatar.jpg';
+    const ext = filename.split('.').pop()?.toLowerCase() ?? 'jpg';
+    const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
+    form.append('avatar', { uri, name: filename, type: mime } as any);
+    return api.patch<User>('/auth/me/', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
   logout: () =>
     api.post('/auth/logout/'),
+
+  forgotPassword: (phone: string) =>
+    api.post<{ detail: string }>('/auth/password/reset/', { phone }),
+
+  resetPassword: (phone: string, code: string, new_password: string) =>
+    api.post<{ detail: string }>('/auth/password/reset/confirm/', { phone, code, new_password }),
 };
 
 // ── Games ───────────────────────────────────────────
@@ -119,8 +140,20 @@ export const venuesApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
 
+  createVenue: (data: {
+    name: string; type: string; sport_id: string;
+    address: string; city: string; price_per_hour: number;
+    description?: string;
+  }) => api.post<Venue>('/venues/', data),
+
   update: (id: number, data: Partial<Venue>) =>
     api.patch<Venue>(`/venues/${id}/`, data),
+
+  reviews: (id: number) =>
+    api.get<{ id: number; rating: number; text: string; author_name: string; created_at: string }[]>(`/venues/${id}/reviews/`),
+
+  addReview: (id: number, data: { rating: number; text?: string }) =>
+    api.post<{ id: number; rating: number; text: string; author_name: string; created_at: string }>(`/venues/${id}/reviews/`, data),
 };
 
 // ── Bookings ────────────────────────────────────────
@@ -141,6 +174,12 @@ export const bookingsApi = {
     api.post<Booking>(`/bookings/${id}/cancel/`),
 };
 
+// ── Users (search) ──────────────────────────────────
+export const usersApi = {
+  searchByUsername: (username: string) =>
+    api.get<User[]>('/auth/users/search/', { params: { username } }),
+};
+
 // ── Chats ───────────────────────────────────────────
 export const chatsApi = {
   rooms: () =>
@@ -148,6 +187,30 @@ export const chatsApi = {
 
   messages: (roomId: number, params?: { page?: number }) =>
     api.get<PaginatedResponse<ChatMessage>>(`/chats/rooms/${roomId}/messages/`, { params }),
+
+  uploadMedia: (roomId: number, uri: string, mediaType: 'image' | 'video' | 'audio') => {
+    const form = new FormData();
+    const filename = uri.split('/').pop() ?? `media.${mediaType === 'audio' ? 'm4a' : 'jpg'}`;
+    const ext = filename.split('.').pop()?.toLowerCase() ?? 'jpg';
+    const mimeMap: Record<string, string> = {
+      jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+      mp4: 'video/mp4', mov: 'video/quicktime',
+      m4a: 'audio/m4a', aac: 'audio/aac', wav: 'audio/wav',
+    };
+    form.append('file', { uri, name: filename, type: mimeMap[ext] ?? 'application/octet-stream' } as any);
+    form.append('media_type', mediaType);
+    return api.post<ChatMessage>(`/chats/rooms/${roomId}/upload/`, form);
+  },
+
+  createDirect: (userId: number) =>
+    api.post<ChatRoom>('/chats/rooms/direct/', { user_id: userId }),
+
+  updateAvatar: (roomId: number, uri: string) => {
+    const form = new FormData();
+    const filename = uri.split('/').pop() ?? 'avatar.jpg';
+    form.append('avatar', { uri, name: filename, type: 'image/jpeg' } as any);
+    return api.patch<ChatRoom>(`/chats/rooms/${roomId}/avatar/`, form);
+  },
 };
 
 // ── Payments ────────────────────────────────────────
@@ -155,8 +218,8 @@ export const paymentsApi = {
   methods: () =>
     api.get<PaymentMethod[]>('/payments/methods/'),
 
-  addCard: (token: string) =>
-    api.post<PaymentMethod>('/payments/methods/', { token }),
+  addCard: (payload: { type: string; last4: string; label: string }) =>
+    api.post<PaymentMethod>('/payments/methods/', payload),
 
   initiate: (bookingId: number, methodId: string) =>
     api.post<{ payment_id: string; redirect_url?: string }>(

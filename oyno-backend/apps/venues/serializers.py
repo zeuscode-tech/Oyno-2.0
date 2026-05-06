@@ -29,7 +29,7 @@ class VenueListSerializer(serializers.ModelSerializer):
         fields = [
             "id", "name", "type", "sport_id", "address", "city",
             "lat", "lng", "rating", "reviews_count",
-            "price_per_hour", "images", "is_active",
+            "price_per_hour", "images", "is_active", "link_2gis"
         ]
 
     def get_images(self, obj: Venue) -> list[str]:
@@ -38,6 +38,9 @@ class VenueListSerializer(serializers.ModelSerializer):
         if request:
             return [request.build_absolute_uri(i.image.url) for i in imgs if i.image]
         return [i.image.url for i in imgs if i.image]
+
+
+        
 
 
 class VenueDetailSerializer(VenueListSerializer):
@@ -56,7 +59,7 @@ class VenueCreateSerializer(serializers.ModelSerializer):
         fields = [
             "name", "type", "sport_id", "address", "city",
             "lat", "lng", "price_per_hour", "description",
-            "amenities", "working_hours",
+            "amenities", "working_hours", "link_2gis"
         ]
 
     def create(self, validated_data: dict) -> Venue:

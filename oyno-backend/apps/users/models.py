@@ -29,12 +29,29 @@ class User(AbstractBaseUser, PermissionsMixin):
         ADVANCED = "advanced", "Продвинутый игрок"
         PRO = "pro", "Профессионал"
 
+    class SkillLevel(models.TextChoices):
+        BEGINNER = "beginner", "Новичок"
+        INTERMEDIATE = "intermediate", "Любитель"
+        ADVANCED = "advanced", "Продвинутый"
+        PRO = "pro", "Профессионал"
+
+    class MainSport(models.TextChoices):
+        FOOTBALL = "football", "Футбол"
+        BASKETBALL = "basketball", "Баскетбол"
+        VOLLEYBALL = "volleyball", "Волейбол"
+        TENNIS = "tennis", "Теннис"
+        OTHER = "other", "Другое"
+
     phone = models.CharField(max_length=20, unique=True)
     name = models.CharField(max_length=100)
+    username = models.CharField(max_length=50, unique=True, null=True, blank=True)
     avatar = models.ImageField(upload_to="avatars/", null=True, blank=True)
     city = models.CharField(max_length=100, default="Бишкек")
+    bio = models.TextField(blank=True, default="")
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.PLAYER)
     rank = models.CharField(max_length=20, choices=Rank.choices, default=Rank.BEGINNER)
+    skill_level = models.CharField(max_length=20, choices=SkillLevel.choices, default=SkillLevel.BEGINNER)
+    main_sport = models.CharField(max_length=20, choices=MainSport.choices, blank=True, default="")
     rating = models.DecimalField(max_digits=3, decimal_places=1, default=0.0)
     reliability = models.PositiveSmallIntegerField(default=100)  # %
     matches_played = models.PositiveIntegerField(default=0)

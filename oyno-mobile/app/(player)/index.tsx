@@ -1,13 +1,13 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, FlatList,
   StyleSheet, Image, Modal, TextInput, ActivityIndicator,
-  SafeAreaView, Platform,
+  SafeAreaView, Platform, Animated, PanResponder,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Toast from 'react-native-toast-message';
-import { Bell, Plus, X, LayoutGrid, Globe, Activity, Layers, Circle } from 'lucide-react-native';
+import { Bell, Plus, X } from 'lucide-react-native';
 import { gamesApi, venuesApi } from '@/services/api';
 import { useUIStore } from '@/stores/uiStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -15,12 +15,12 @@ import { COLORS, FONTS, RADIUS, SPACING, SHADOW } from '@/constants/theme';
 import { Game, Venue, SportId, SkillLevel } from '@/types';
 import { t } from '@/constants/i18n';
 
-const SPORT_CATEGORIES: { id: SportId; name: string; Icon: any }[] = [
-  { id: 'all', name: 'Все', Icon: LayoutGrid },
-  { id: 'football', name: 'Футбол', Icon: Globe },
-  { id: 'basketball', name: 'Баскет', Icon: Activity },
-  { id: 'volleyball', name: 'Волей', Icon: Layers },
-  { id: 'tennis', name: 'Теннис', Icon: Circle },
+const SPORT_CATEGORIES: { id: SportId; name: string; emoji: string }[] = [
+  { id: 'all', name: 'Все', emoji: '⚡' },
+  { id: 'football', name: 'Футбол', emoji: '⚽' },
+  { id: 'basketball', name: 'Баскет', emoji: '🏀' },
+  { id: 'volleyball', name: 'Волей', emoji: '🏐' },
+  { id: 'tennis', name: 'Теннис', emoji: '🎾' },
 ];
 
 export default function HomeScreen() {
@@ -37,9 +37,17 @@ export default function HomeScreen() {
     queryFn: () => venuesApi.list({ sport_id: selectedSport === 'all' ? undefined : selectedSport }),
   });
 
-  const games = gamesData?.data?.results ?? [];
+  const allGames = gamesData?.data?.results ?? [];
   const venues = venuesData?.data?.results ?? [];
   const isLoading = gamesLoading || venuesLoading;
+
+  const hotGames = useMemo(() => {
+    const now = new Date();
+    return allGames
+      .filter((g) => new Date(g.date_time) >= now)
+      .sort((a, b) => new Date(a.date_time).getTime() - new Date(b.date_time).getTime())
+      .slice(0, 3);
+  }, [allGames]);
 
   return (
     <SafeAreaView style={styles.root}>
@@ -86,7 +94,7 @@ export default function HomeScreen() {
                 activeOpacity={0.8}
               >
                 <View style={[styles.categoryIcon, active && styles.categoryIconActive]}>
-                  <sport.Icon size={28} color={active ? '#000' : '#fff'} strokeWidth={1.5} />
+                  <Text style={styles.categoryEmoji}>{sport.emoji}</Text>
                 </View>
                 <Text style={[styles.categoryLabel, active && styles.categoryLabelActive]}>
                   {sport.name}
@@ -109,11 +117,11 @@ export default function HomeScreen() {
                     : <Text key={i} style={{ color: COLORS.accent }}>{word}</Text>
                 )}
               </Text>
-              {games.map((game) => (
+              {hotGames.map((game) => (
                 <GameCard key={game.id} game={game} />
               ))}
-              {games.length === 0 && (
-                <Text style={styles.emptyText}>Нет игр по фильтру</Text>
+              {hotGames.length === 0 && (
+                <Text style={styles.emptyText}>Нет предстоящих игр</Text>
               )}
             </View>
 
@@ -152,7 +160,7 @@ function GameCard({ game }: { game: Game }) {
       activeOpacity={0.85}
     >
       <View style={styles.gameCardIcon}>
-        {sportCategory && <sportCategory.Icon size={28} color={COLORS.accent} strokeWidth={1.5} />}
+        <Text style={styles.gameCardEmoji}>{sportCategory?.emoji ?? '🎮'}</Text>
       </View>
       <View style={styles.gameCardInfo}>
         <Text style={styles.gameCardTitle} numberOfLines={1}>
@@ -178,11 +186,17 @@ function VenueCard({ venue }: { venue: Venue }) {
       onPress={() => router.push(`/(player)/venues/${venue.id}`)}
       activeOpacity={0.85}
     >
-      <Image
-        source={{ uri: venue.images?.[0] ?? 'https://via.placeholder.com/300' }}
-        style={styles.venueCardImage}
-        resizeMode="cover"
-      />
+      {venue.images?.[0] ? (
+        <Image
+          source={{ uri: venue.images[0] }}
+          style={styles.venueCardImage}
+          resizeMode="cover"
+        />
+      ) : (
+        <View style={[styles.venueCardImage, styles.venueCardImagePlaceholder]}>
+          <Text style={styles.venueCardEmoji}>🏟️</Text>
+        </View>
+      )}
       <View style={styles.venueCardBody}>
         <Text style={styles.venueCardName} numberOfLines={1}>{venue.name}</Text>
         <Text style={styles.venueCardRating}>★ {venue.rating}</Text>
@@ -192,11 +206,11 @@ function VenueCard({ venue }: { venue: Venue }) {
 }
 
 // ── Create Game Modal ─────────────────────────────────
-const GAME_SPORTS: { id: SportId; name: string }[] = [
-  { id: 'football', name: 'Футбол' },
-  { id: 'basketball', name: 'Баскет' },
-  { id: 'volleyball', name: 'Волей' },
-  { id: 'tennis', name: 'Теннис' },
+const GAME_SPORTS: { id: SportId; name: string; emoji: string }[] = [
+  { id: 'football', name: 'Футбол', emoji: '⚽' },
+  { id: 'basketball', name: 'Баскет', emoji: '🏀' },
+  { id: 'volleyball', name: 'Волей', emoji: '🏐' },
+  { id: 'tennis', name: 'Теннис', emoji: '🎾' },
 ];
 
 const SKILL_LEVELS: { id: SkillLevel; name: string }[] = [
@@ -212,11 +226,12 @@ function CreateGameModal({ visible, onClose }: { visible: boolean; onClose: () =
   const [venueId, setVenueId] = useState<number | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [time, setTime] = useState('18:00');
+  const [duration, setDuration] = useState(1.5);
   const [playersNeeded, setPlayersNeeded] = useState(10);
   const [level, setLevel] = useState<SkillLevel>('ANY');
   const [description, setDescription] = useState('');
 
-  const { data: venuesData } = useQuery({
+  const { data: venuesData, isLoading: venuesLoading } = useQuery({
     queryKey: ['venues-all'],
     queryFn: () => venuesApi.list(),
     enabled: visible,
@@ -235,7 +250,7 @@ function CreateGameModal({ visible, onClose }: { visible: boolean; onClose: () =
         sport_id: sportId,
         venue_id: venueId!,
         date_time: `${selectedDate}T${time}:00`,
-        duration: 90,
+        duration,
         players_needed: playersNeeded,
         level,
         description: description.trim() || undefined,
@@ -248,12 +263,15 @@ function CreateGameModal({ visible, onClose }: { visible: boolean; onClose: () =
       setPlayersNeeded(10);
       onClose();
     },
-    onError: () => {
-      Toast.show({ type: 'error', text1: 'Ошибка создания игры' });
+    onError: (e: any) => {
+      const msg = e?.response?.data
+        ? JSON.stringify(e.response.data)
+        : 'Ошибка создания игры';
+      Toast.show({ type: 'error', text1: 'Ошибка', text2: msg.slice(0, 80) });
     },
   });
 
-  const canSubmit = venueId !== null && time.length >= 4;
+  const canSubmit = venueId !== null;
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
@@ -283,7 +301,7 @@ function CreateGameModal({ visible, onClose }: { visible: boolean; onClose: () =
                 onPress={() => setSportId(s.id)}
               >
                 <Text style={[styles.pillText, sportId === s.id && styles.pillTextActive]}>
-                  {s.name}
+                  {s.emoji} {s.name}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -318,21 +336,33 @@ function CreateGameModal({ visible, onClose }: { visible: boolean; onClose: () =
           </ScrollView>
 
           {/* Time */}
-          <Text style={styles.fieldLabel}>ВРЕМЯ (ЧЧ:ММ)</Text>
-          <TextInput
-            style={styles.fieldInput}
-            placeholder="18:00"
-            placeholderTextColor={COLORS.gray[600]}
-            value={time}
-            onChangeText={setTime}
-            keyboardType="numbers-and-punctuation"
-            maxLength={5}
-          />
+          <Text style={styles.fieldLabel}>ВРЕМЯ НАЧАЛА</Text>
+          <TimeWheelPicker value={time} onChange={setTime} />
+
+          {/* Duration */}
+          <Text style={styles.fieldLabel}>ДЛИТЕЛЬНОСТЬ</Text>
+          <View style={styles.pillRow}>
+            {([1, 1.5, 2, 2.5, 3] as const).map((d) => (
+              <TouchableOpacity
+                key={d}
+                style={[styles.pill, duration === d && styles.pillActive]}
+                onPress={() => setDuration(d)}
+              >
+                <Text style={[styles.pillText, duration === d && styles.pillTextActive]}>
+                  {d === 1 ? '1 ч' : d === 1.5 ? '1:30' : d === 2 ? '2 ч' : d === 2.5 ? '2:30' : '3 ч'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
           {/* Venue */}
           <Text style={styles.fieldLabel}>ПЛОЩАДКА</Text>
-          {venues.length === 0 ? (
-            <Text style={styles.fieldHint}>Загрузка площадок...</Text>
+          {venuesLoading ? (
+            <ActivityIndicator color={COLORS.accent} style={{ marginBottom: SPACING.md }} />
+          ) : venues.length === 0 ? (
+            <Text style={[styles.fieldHint, { color: COLORS.error }]}>
+              Нет доступных площадок. Сначала добавьте площадки через режим владельца.
+            </Text>
           ) : (
             <ScrollView
               horizontal
@@ -422,6 +452,168 @@ function CreateGameModal({ visible, onClose }: { visible: boolean; onClose: () =
     </Modal>
   );
 }
+
+// ── Wheel Picker (PanResponder — no nested scroll issues) ─────────────────
+const ITEM_H = 48;
+const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+const MINS = ['00', '15', '30', '45'];
+
+function WheelColumn({
+  items, value, onChange, label,
+}: {
+  items: string[]; value: string; onChange: (v: string) => void; label: string;
+}) {
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  const startIdx = Math.max(0, items.indexOf(value));
+  const animY = useRef(new Animated.Value(-startIdx * ITEM_H)).current;
+  const baseY = useRef(-startIdx * ITEM_H);
+
+  // Sync when value changes from outside (e.g. hours column updates minutes column)
+  useEffect(() => {
+    const i = Math.max(0, items.indexOf(value));
+    const target = -i * ITEM_H;
+    if (Math.abs(baseY.current - target) > 1) {
+      baseY.current = target;
+      Animated.spring(animY, {
+        toValue: target,
+        useNativeDriver: true,
+        damping: 20,
+        stiffness: 300,
+      }).start();
+    }
+  }, [value]);
+
+  const pan = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 2,
+    onPanResponderGrant: () => {
+      // Freeze at current animated position so drag starts from there
+      animY.stopAnimation((v) => {
+        baseY.current = v;
+        animY.setValue(v);
+      });
+    },
+    onPanResponderMove: (_, gs) => {
+      const next = baseY.current + gs.dy;
+      const min = -(items.length - 1) * ITEM_H;
+      animY.setValue(Math.max(min, Math.min(0, next)));
+    },
+    onPanResponderRelease: (_, gs) => {
+      const rawY = baseY.current + gs.dy;
+      // vy < 0 means upward (higher hours) → project in same direction: rawY + vy*k
+      const projected = rawY + gs.vy * 120;
+      const snapIdx = Math.max(0, Math.min(
+        Math.round(-projected / ITEM_H),
+        items.length - 1
+      ));
+      const snapY = -snapIdx * ITEM_H;
+      baseY.current = snapY;
+      onChangeRef.current(items[snapIdx]);
+      Animated.spring(animY, {
+        toValue: snapY,
+        useNativeDriver: true,
+        damping: 20,
+        stiffness: 200,
+      }).start();
+    },
+  }), [items]);
+
+  return (
+    <View style={wStyles.col}>
+      <Text style={wStyles.colLabel}>{label}</Text>
+      <View style={wStyles.colInner}>
+        <View style={wStyles.highlight} pointerEvents="none" />
+        <Animated.View
+          {...pan.panHandlers}
+          style={{ paddingVertical: ITEM_H, transform: [{ translateY: animY }] }}
+        >
+          {items.map((item) => (
+            <View key={item} style={wStyles.item}>
+              <Text style={[wStyles.itemText, item === value && wStyles.itemTextActive]}>
+                {item}
+              </Text>
+            </View>
+          ))}
+        </Animated.View>
+      </View>
+    </View>
+  );
+}
+
+function TimeWheelPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [h, m] = value.split(':');
+  const normM = MINS.includes(m) ? m : '00';
+  return (
+    <View style={wStyles.picker}>
+      <WheelColumn
+        items={HOURS}
+        value={h}
+        label="ЧЧ"
+        onChange={(hh) => onChange(`${hh}:${normM}`)}
+      />
+      <Text style={wStyles.colon}>:</Text>
+      <WheelColumn
+        items={MINS}
+        value={normM}
+        label="ММ"
+        onChange={(mm) => onChange(`${h}:${mm}`)}
+      />
+    </View>
+  );
+}
+
+const wStyles = StyleSheet.create({
+  picker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.bgCard,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.xl,
+    paddingHorizontal: SPACING.lg,
+    marginBottom: 4,
+    height: ITEM_H * 3 + SPACING.sm * 2 + 24, // 3 visible rows + label space
+    gap: 8,
+  },
+  col: { flex: 1, alignItems: 'center' },
+  colLabel: {
+    fontFamily: FONTS.blackItalic,
+    fontSize: 9,
+    color: COLORS.accent,
+    letterSpacing: 3,
+    marginBottom: 4,
+  },
+  colInner: {
+    height: ITEM_H * 3,
+    overflow: 'hidden',
+    width: '100%',
+    position: 'relative',
+  },
+  highlight: {
+    position: 'absolute',
+    top: ITEM_H,
+    left: 0,
+    right: 0,
+    height: ITEM_H,
+    backgroundColor: 'rgba(198,255,0,0.08)',
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(198,255,0,0.25)',
+    zIndex: 1,
+    pointerEvents: 'none',
+  },
+  item: { height: ITEM_H, justifyContent: 'center', alignItems: 'center', width: '100%' },
+  itemText: { fontFamily: FONTS.blackItalic, fontSize: 20, color: COLORS.gray[600] },
+  itemTextActive: { color: COLORS.white, fontSize: 28 },
+  colon: {
+    fontFamily: FONTS.blackItalic,
+    fontSize: 32,
+    color: COLORS.gray[600],
+    paddingTop: 20,
+  },
+});
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bg },
@@ -516,6 +708,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   categoryLabelActive: { color: COLORS.white },
+  categoryEmoji: { fontSize: 28 },
 
   // Section
   section: { paddingHorizontal: SPACING.lg, marginBottom: SPACING.xl },
@@ -559,6 +752,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
+  gameCardEmoji: { fontSize: 28 },
   gameCardInfo: { flex: 1 },
   gameCardTitle: {
     fontFamily: FONTS.blackItalic,
@@ -606,6 +800,14 @@ const styles = StyleSheet.create({
     ...SHADOW.card,
   },
   venueCardImage: { width: '100%', height: 120 },
+  venueCardImagePlaceholder: {
+    backgroundColor: COLORS.bg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  venueCardEmoji: { fontSize: 40 },
   venueCardBody: { padding: SPACING.md },
   venueCardName: {
     fontFamily: FONTS.blackItalic,

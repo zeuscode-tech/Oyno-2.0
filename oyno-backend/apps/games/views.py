@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
+from django.utils import timezone
 
 from .models import Game, GameParticipant
 from .serializers import GameListSerializer, GameDetailSerializer, GameCreateSerializer
@@ -33,6 +34,9 @@ class GameViewSet(viewsets.ModelViewSet):
         city = self.request.query_params.get("city")
         if city:
             qs = qs.filter(venue__city=city)
+        # Для списка скрываем прошедшие игры; для detail/join/leave оставляем все
+        if self.action == "list":
+            qs = qs.filter(date_time__gte=timezone.now())
         return qs
 
     @action(detail=False, methods=["get"], url_path="my")
