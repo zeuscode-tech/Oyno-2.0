@@ -30,7 +30,7 @@ const queryClient = new QueryClient({
 export default function RootLayout() {
   const loadFromStorage = useAuthStore((s) => s.loadFromStorage);
 
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontLoadError] = useFonts({
     Montserrat_400Regular,
     Montserrat_500Medium,
     Montserrat_700Bold,
@@ -44,16 +44,18 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (fontsLoaded) SplashScreen.hideAsync();
-  }, [fontsLoaded]);
+    if (fontsLoaded || fontLoadError) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [fontsLoaded, fontLoadError]);
 
-  if (!fontsLoaded) return null;
+  if (!fontsLoaded && !fontLoadError) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: COLORS.bg }}>
       <QueryClientProvider client={queryClient}>
         <StatusBar style="light" backgroundColor={COLORS.bg} />
-        <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
+        <Stack screenOptions={{ headerShown: false, animation: 'none' }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="(player)" />

@@ -1,14 +1,12 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
-import * as SecureStore from 'expo-secure-store';
 import { AuthTokens, User, Game, Venue, Booking, ChatRoom, ChatMessage,
   DashboardStats, TimeSlot, CreateGamePayload, CreateBookingPayload,
   PaginatedResponse, LoginPayload, RegisterPayload, PaymentMethod, SportId } from '@/types';
+import { API_BASE_URL } from '@/services/network';
+import { appStorage } from '@/services/storage';
 
 // ── Config ─────────────────────────────────────────
-const rawBaseUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
-export const BASE_URL = (rawBaseUrl && rawBaseUrl.length > 0
-  ? rawBaseUrl
-  : 'http://localhost:8000/api/v1').replace(/\/+$/, '');
+export const BASE_URL = API_BASE_URL;
 const TOKEN_KEY = 'oyno_tokens';
 
 // ── Axios instance ──────────────────────────────────
@@ -20,7 +18,7 @@ const api: AxiosInstance = axios.create({
 
 // ── Request interceptor: attach JWT + fix FormData headers ─────────────
 api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
-  const raw = await SecureStore.getItemAsync(TOKEN_KEY);
+  const raw = await appStorage.getItem(TOKEN_KEY);
   if (raw) {
     const tokens: AuthTokens = JSON.parse(raw);
     config.headers.Authorization = `Bearer ${tokens.access}`;
@@ -40,18 +38,18 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true;
       try {
-        const raw = await SecureStore.getItemAsync(TOKEN_KEY);
+        const raw = await appStorage.getItem(TOKEN_KEY);
         if (!raw) throw new Error('No tokens');
         const tokens: AuthTokens = JSON.parse(raw);
         const { data } = await axios.post<AuthTokens>(
           `${BASE_URL}/auth/token/refresh/`,
           { refresh: tokens.refresh }
         );
-        await SecureStore.setItemAsync(TOKEN_KEY, JSON.stringify(data));
+        await appStorage.setItem(TOKEN_KEY, JSON.stringify(data));
         original.headers.Authorization = `Bearer ${data.access}`;
         return api(original);
       } catch {
-        await SecureStore.deleteItemAsync(TOKEN_KEY);
+        await appStorage.deleteItem(TOKEN_KEY);
         // Redirect to login handled by router
       }
     }

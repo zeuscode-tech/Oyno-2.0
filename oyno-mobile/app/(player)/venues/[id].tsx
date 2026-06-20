@@ -61,7 +61,8 @@ export default function VenueDetailScreen() {
   });
 
   const venue = venueRes?.data;
-  const slots = (slotsRes?.data as any) ?? [];
+  const venueAmenities = venue?.amenities ?? [];
+  const slots: TimeSlot[] = slotsRes?.data ?? [];
 
   const openInMaps = () => {
     if (!venue) return;
@@ -171,11 +172,11 @@ export default function VenueDetailScreen() {
           ) : null}
 
           {/* Amenities */}
-          {venue.amenities?.length > 0 && (
+          {venueAmenities.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>УДОБСТВА</Text>
               <View style={styles.amenitiesRow}>
-                {venue.amenities.map((a) => (
+                {venueAmenities.map((a) => (
                   <View key={a} style={styles.amenityChip}>
                     <Text style={styles.amenityText}>{a}</Text>
                   </View>

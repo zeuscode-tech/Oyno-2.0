@@ -21,7 +21,7 @@ docker compose logs web --tail=30
 
 echo.
 echo ============================================
-echo   Backend should be running on :8000
+echo   Backend should be running on :8080
 echo   Check logs above for errors
 echo ============================================
 pause

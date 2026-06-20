@@ -20,6 +20,6 @@ Write-Host "`n--- Status ---" -ForegroundColor Cyan
 docker compose ps
 
 Write-Host "`n============================================" -ForegroundColor Green
-Write-Host "   Done! API: http://localhost:8000" -ForegroundColor Green
+Write-Host "   Done! API: http://localhost:8080" -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Green
 Read-Host "`nPress Enter to exit"

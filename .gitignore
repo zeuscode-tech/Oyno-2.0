@@ -33,6 +33,9 @@ node_modules/
 oyno-mobile/node_modules/
 oyno-mobile/.expo/
 oyno-mobile/.expo-shared/
+oyno-mobile/.expo-run-*.log
+oyno-mobile/.expo-run-*.err.log
+oyno-mobile/.web-bundle.js
 oyno-mobile/dist/
 oyno-mobile/web-build/
 oyno-mobile/.turbo/

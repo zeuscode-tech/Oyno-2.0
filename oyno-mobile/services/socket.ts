@@ -1,15 +1,8 @@
-import { io, Socket } from 'socket.io-client';
-import * as SecureStore from 'expo-secure-store';
 import { WSMessage, WSChatMessage } from '@/types';
+import { WS_BASE_URL } from '@/services/network';
+import { appStorage } from '@/services/storage';
 
-// Django Channels используют стандартный WebSocket (не socket.io).
-// Этот файл — обёртка над нативным WebSocket для Django Channels.
-
-const rawApi = process.env.EXPO_PUBLIC_API_URL?.trim() ?? 'http://localhost:8080/api/v1';
-const WS_BASE = rawApi
-  .replace(/^https/, 'wss')
-  .replace(/^http/, 'ws')
-  .replace(/\/api\/v1\/?$/, '/ws');
+const WS_BASE = WS_BASE_URL;
 const TOKEN_KEY = 'oyno_tokens';
 
 type MessageHandler = (msg: WSChatMessage) => void;
@@ -21,7 +14,7 @@ class OynoSocket {
 
   private async getToken(): Promise<string | null> {
     try {
-      const raw = await SecureStore.getItemAsync(TOKEN_KEY);
+      const raw = await appStorage.getItem(TOKEN_KEY);
       if (!raw) return null;
       return JSON.parse(raw).access;
     } catch {

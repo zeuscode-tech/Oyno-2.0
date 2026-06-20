@@ -1,6 +1,6 @@
-import { create } from 'zustand';
-import * as SecureStore from 'expo-secure-store';
+import { create } from '@/lib/zustand';
 import { User, AuthTokens, UserRole } from '@/types';
+import { appStorage } from '@/services/storage';
 
 interface AuthState {
   user: User | null;
@@ -9,7 +9,6 @@ interface AuthState {
   isAuthenticated: boolean;
   activeRole: UserRole;
 
-  // Actions
   setUser: (user: User) => void;
   setTokens: (tokens: AuthTokens) => Promise<void>;
   setActiveRole: (role: UserRole) => void;
@@ -30,13 +29,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   setUser: (user) => {
     set({ user, isAuthenticated: true });
-    // Fire-and-forget: persist user so it survives app restart
-    SecureStore.setItemAsync(USER_KEY, JSON.stringify(user)).catch(() => {});
+    appStorage.setItem(USER_KEY, JSON.stringify(user)).catch(() => { });
   },
 
   setTokens: async (tokens) => {
     set({ tokens });
-    await SecureStore.setItemAsync(TOKEN_KEY, JSON.stringify(tokens));
+    await appStorage.setItem(TOKEN_KEY, JSON.stringify(tokens));
   },
 
   setActiveRole: (role) => set({ activeRole: role }),
@@ -46,23 +44,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (current) {
       const updated = { ...current, ...data };
       set({ user: updated });
-      SecureStore.setItemAsync(USER_KEY, JSON.stringify(updated)).catch(() => {});
+      appStorage.setItem(USER_KEY, JSON.stringify(updated)).catch(() => { });
     }
   },
 
+
+
   logout: async () => {
     await Promise.all([
-      SecureStore.deleteItemAsync(TOKEN_KEY),
-      SecureStore.deleteItemAsync(USER_KEY),
-    ]).catch(() => {});
+      appStorage.deleteItem(TOKEN_KEY),
+      appStorage.deleteItem(USER_KEY),
+    ]).catch(() => { });
     set({ user: null, tokens: null, isAuthenticated: false, activeRole: 'player' });
   },
 
   loadFromStorage: async () => {
     try {
       const [rawTokens, rawUser] = await Promise.all([
-        SecureStore.getItemAsync(TOKEN_KEY),
-        SecureStore.getItemAsync(USER_KEY),
+        appStorage.getItem(TOKEN_KEY),
+        appStorage.getItem(USER_KEY),
       ]);
       if (rawTokens && rawUser) {
         const tokens: AuthTokens = JSON.parse(rawTokens);
@@ -77,8 +77,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
     } catch {
       // Corrupted data — clear it
-      SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => {});
-      SecureStore.deleteItemAsync(USER_KEY).catch(() => {});
+      appStorage.deleteItem(TOKEN_KEY).catch(() => { });
+      appStorage.deleteItem(USER_KEY).catch(() => { });
     } finally {
       set({ isLoading: false });
     }

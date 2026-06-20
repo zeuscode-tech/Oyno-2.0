@@ -50,6 +50,7 @@ export default function ChatRoomScreen() {
   const room = roomsList.find((r) => r.id === roomId);
   const isOrganizer = room?.organizer_id === user?.id;
 
+
   const serverMessages = messagesData?.data?.results ?? [];
   const allMessages = [
     ...serverMessages,

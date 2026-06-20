@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create } from '@/lib/zustand';
 import { SportId } from '@/types';
 
 interface UIState {
