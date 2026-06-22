@@ -1,56 +1,86 @@
 import { useState } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity,
-  StyleSheet, SafeAreaView, Platform,
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  StyleSheet,
+  SafeAreaView,
+  Platform,
+  Linking,
+  RefreshControl,
 } from 'react-native';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, X, Clock, MapPin } from 'lucide-react-native';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Check, Clock, MapPin, Phone, UserRound, X } from 'lucide-react-native';
 import Toast from 'react-native-toast-message';
-import { bookingsApi } from '@/services/api';
+import { bookingRequestsApi } from '@/services/api';
 import { COLORS, FONTS, RADIUS, SPACING, SHADOW } from '@/constants/theme';
-import { Booking, BookingStatus } from '@/types';
-import { t } from '@/constants/i18n';
+import { BookingRequest, BookingRequestStatus } from '@/types';
 
-const STATUS_TABS: { id: BookingStatus | 'all'; label: string }[] = [
+const STATUS_TABS: { id: BookingRequestStatus | 'all'; label: string }[] = [
   { id: 'all', label: 'Все' },
-  { id: 'pending', label: 'Ожидает' },
+  { id: 'new', label: 'Новые' },
+  { id: 'contacted', label: 'Связались' },
   { id: 'confirmed', label: 'Подтверждено' },
-  { id: 'completed', label: 'Завершено' },
+  { id: 'cancelled', label: 'Отменено' },
 ];
 
+const STATUS_LABELS: Record<BookingRequestStatus, string> = {
+  new: 'Новая',
+  contacted: 'Связались',
+  confirmed: 'Подтверждена',
+  cancelled: 'Отменена',
+};
+
+const STATUS_COLORS: Record<BookingRequestStatus, string> = {
+  new: COLORS.warning,
+  contacted: COLORS.accent,
+  confirmed: COLORS.success,
+  cancelled: COLORS.error,
+};
+
+const SPORT_LABELS: Record<string, string> = {
+  football: 'Футбол',
+  basketball: 'Баскетбол',
+  volleyball: 'Волейбол',
+  tennis: 'Теннис',
+};
+
 export default function OwnerBookingsScreen() {
-  const [statusFilter, setStatusFilter] = useState<BookingStatus | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<BookingRequestStatus | 'all'>('all');
   const qc = useQueryClient();
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['owner-bookings', statusFilter],
+  const query = useQuery({
+    queryKey: ['owner-booking-requests', statusFilter],
     queryFn: () =>
-      bookingsApi.ownerBookings(statusFilter !== 'all' ? { status: statusFilter } : undefined),
+      bookingRequestsApi.ownerList(statusFilter !== 'all' ? { status: statusFilter } : undefined),
     refetchInterval: 30_000,
   });
 
-  const bookings = data?.data ?? [];
+  const requests = query.data?.data ?? [];
 
-  const { mutate: confirm } = useMutation({
-    mutationFn: (id: number) => bookingsApi.confirm(id),
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: BookingRequestStatus }) =>
+      bookingRequestsApi.updateOwnerStatus(id, status),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['owner-bookings'] });
-      Toast.show({ type: 'success', text1: 'Бронь подтверждена' });
+      qc.invalidateQueries({ queryKey: ['owner-booking-requests'] });
+      Toast.show({ type: 'success', text1: 'Статус заявки обновлён' });
+    },
+    onError: () => {
+      Toast.show({ type: 'error', text1: 'Не удалось обновить заявку' });
     },
   });
 
-  const { mutate: cancel } = useMutation({
-    mutationFn: (id: number) => bookingsApi.cancel(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['owner-bookings'] });
-      Toast.show({ type: 'error', text1: 'Бронь отменена' });
-    },
-  });
+  const updateStatus = (id: number, status: BookingRequestStatus) => {
+    statusMutation.mutate({ id, status });
+  };
 
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.header}>
-        <Text style={styles.title}>БРОНИ</Text>
+        <Text style={styles.eyebrow}>OWNER</Text>
+        <Text style={styles.title}>Заявки</Text>
+        <Text style={styles.subtitle}>Новые запросы от игроков. Позвоните и отметьте результат.</Text>
 
         <FlatList
           horizontal
@@ -62,9 +92,10 @@ export default function OwnerBookingsScreen() {
             <TouchableOpacity
               style={[styles.tab, statusFilter === item.id && styles.tabActive]}
               onPress={() => setStatusFilter(item.id)}
+              activeOpacity={0.85}
             >
-              <Text style={[styles.tabText, statusFilter === item.id && { color: '#000' }]}>
-                {item.label.toUpperCase()}
+              <Text style={[styles.tabText, statusFilter === item.id && styles.tabTextActive]}>
+                {item.label}
               </Text>
             </TouchableOpacity>
           )}
@@ -72,100 +103,145 @@ export default function OwnerBookingsScreen() {
       </View>
 
       <FlatList
-        data={bookings}
+        data={requests}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={query.refetch} />}
         renderItem={({ item }) => (
-          <BookingCard
-            booking={item}
-            onConfirm={() => confirm(item.id)}
-            onCancel={() => cancel(item.id)}
+          <RequestCard
+            request={item}
+            isUpdating={statusMutation.isPending}
+            onContacted={() => updateStatus(item.id, 'contacted')}
+            onConfirmed={() => updateStatus(item.id, 'confirmed')}
+            onCancelled={() => updateStatus(item.id, 'cancelled')}
           />
         )}
         ListEmptyComponent={
-          <Text style={styles.empty}>Нет броней</Text>
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>{query.isLoading ? 'Загружаем...' : 'Заявок пока нет'}</Text>
+            <Text style={styles.emptyText}>Когда игрок оставит заявку на вашу площадку, она появится здесь.</Text>
+          </View>
         }
       />
     </SafeAreaView>
   );
 }
 
-function BookingCard({
-  booking,
-  onConfirm,
-  onCancel,
+function RequestCard({
+  request,
+  isUpdating,
+  onContacted,
+  onConfirmed,
+  onCancelled,
 }: {
-  booking: Booking;
-  onConfirm: () => void;
-  onCancel: () => void;
+  request: BookingRequest;
+  isUpdating: boolean;
+  onContacted: () => void;
+  onConfirmed: () => void;
+  onCancelled: () => void;
 }) {
-  const STATUS_COLORS: Record<BookingStatus, string> = {
-    pending: COLORS.warning,
-    confirmed: COLORS.accent,
-    cancelled: COLORS.error,
-    completed: COLORS.gray[500],
+  const callCustomer = () => {
+    Linking.openURL(`tel:${request.phone}`);
   };
-  const STATUS_LABELS: Record<BookingStatus, string> = {
-    pending: 'Ожидает',
-    confirmed: 'Подтверждено',
-    cancelled: 'Отменено',
-    completed: 'Завершено',
-  };
+
+  const dateText = request.preferred_date
+    ? new Date(`${request.preferred_date}T00:00:00`).toLocaleDateString('ru-RU', {
+        day: 'numeric',
+        month: 'long',
+      })
+    : 'Дата не выбрана';
+
+  const sportText = request.sport_id ? SPORT_LABELS[request.sport_id] ?? request.sport_id : 'Спорт не выбран';
 
   return (
     <View style={styles.card}>
-      {/* Header */}
-      <View style={styles.cardHeader}>
-        <View>
-          <Text style={styles.cardVenue}>{booking.venue.name}</Text>
-          <View style={styles.cardAddressRow}>
-            <MapPin size={11} color={COLORS.accent} />
-            <Text style={styles.cardAddress} numberOfLines={1}>{booking.venue.address}</Text>
+      <View style={styles.cardTop}>
+        <View style={styles.cardTitleBlock}>
+          <Text style={styles.venueName}>{request.venue.name}</Text>
+          <View style={styles.metaRow}>
+            <MapPin size={13} color={COLORS.gray[500]} />
+            <Text style={styles.address} numberOfLines={1}>{request.venue.address}</Text>
           </View>
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[booking.status] + '22', borderColor: STATUS_COLORS[booking.status] }]}>
-          <Text style={[styles.statusText, { color: STATUS_COLORS[booking.status] }]}>
-            {STATUS_LABELS[booking.status].toUpperCase()}
+
+        <View
+          style={[
+            styles.statusBadge,
+            {
+              borderColor: STATUS_COLORS[request.status],
+              backgroundColor: `${STATUS_COLORS[request.status]}22`,
+            },
+          ]}
+        >
+          <Text style={[styles.statusText, { color: STATUS_COLORS[request.status] }]}>
+            {STATUS_LABELS[request.status]}
           </Text>
         </View>
       </View>
 
-      {/* User + Time */}
-      <View style={styles.infoRow}>
+      <View style={styles.infoBox}>
         <View style={styles.infoItem}>
-          <Text style={styles.infoLabel}>ИГРОК</Text>
-          <Text style={styles.infoValue}>{booking.user.name}</Text>
-          <Text style={styles.infoSub}>{booking.user.phone}</Text>
+          <UserRound size={15} color={COLORS.accent} />
+          <View style={styles.infoTextBlock}>
+            <Text style={styles.infoLabel}>Клиент</Text>
+            <Text style={styles.infoValue}>{request.customer_name}</Text>
+          </View>
         </View>
-        <View style={styles.infoDivider} />
+
+        <TouchableOpacity style={styles.infoItem} onPress={callCustomer} activeOpacity={0.85}>
+          <Phone size={15} color={COLORS.accent} />
+          <View style={styles.infoTextBlock}>
+            <Text style={styles.infoLabel}>Телефон</Text>
+            <Text style={[styles.infoValue, styles.phoneText]}>{request.phone}</Text>
+          </View>
+        </TouchableOpacity>
+
         <View style={styles.infoItem}>
-          <Text style={styles.infoLabel}>ВРЕМЯ</Text>
-          <Text style={styles.infoValue}>
-            {booking.slot.start_time.slice(0, 5)}–{booking.slot.end_time.slice(0, 5)}
-          </Text>
-          <Text style={styles.infoSub}>
-            {new Date(booking.slot.start_time).toLocaleDateString('ru', { day: 'numeric', month: 'short' })}
-          </Text>
-        </View>
-        <View style={styles.infoDivider} />
-        <View style={styles.infoItem}>
-          <Text style={styles.infoLabel}>СУММА</Text>
-          <Text style={[styles.infoValue, { color: COLORS.accent }]}>{booking.total_price} с</Text>
-          <Text style={styles.infoSub}>{booking.payment_status === 'paid' ? 'Оплачено' : 'Не оплачено'}</Text>
+          <Clock size={15} color={COLORS.accent} />
+          <View style={styles.infoTextBlock}>
+            <Text style={styles.infoLabel}>Когда</Text>
+            <Text style={styles.infoValue}>
+              {dateText}{request.preferred_time ? `, ${request.preferred_time}` : ''}
+            </Text>
+          </View>
         </View>
       </View>
 
-      {/* Actions */}
-      {booking.status === 'pending' && (
+      <View style={styles.detailsRow}>
+        <Text style={styles.detailPill}>{sportText}</Text>
+        {request.players_count ? <Text style={styles.detailPill}>{request.players_count} игроков</Text> : null}
+        <Text style={styles.detailPill}>{request.venue.price_per_hour} сом/час</Text>
+      </View>
+
+      {request.comment ? <Text style={styles.comment}>{request.comment}</Text> : null}
+
+      {request.status !== 'cancelled' && (
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.btnCancel} onPress={onCancel}>
-            <X size={16} color={COLORS.error} />
-            <Text style={styles.btnCancelText}>Отменить</Text>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.secondaryButton]}
+            onPress={onContacted}
+            disabled={isUpdating}
+          >
+            <Phone size={15} color={COLORS.accent} />
+            <Text style={styles.secondaryButtonText}>Связались</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.btnConfirm} onPress={onConfirm}>
-            <Check size={16} color="#000" />
-            <Text style={styles.btnConfirmText}>Подтвердить</Text>
+
+          <TouchableOpacity
+            style={[styles.actionButton, styles.confirmButton]}
+            onPress={onConfirmed}
+            disabled={isUpdating}
+          >
+            <Check size={15} color="#000" />
+            <Text style={styles.confirmButtonText}>Подтвердить</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.iconButton, styles.cancelButton]}
+            onPress={onCancelled}
+            disabled={isUpdating}
+          >
+            <X size={16} color={COLORS.error} />
           </TouchableOpacity>
         </View>
       )}
@@ -179,31 +255,71 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'android' ? SPACING.lg : SPACING.sm,
     paddingBottom: SPACING.sm,
   },
+  eyebrow: {
+    fontFamily: FONTS.blackItalic,
+    fontSize: 10,
+    color: COLORS.accent,
+    letterSpacing: 3,
+    textTransform: 'uppercase',
+    paddingHorizontal: SPACING.lg,
+  },
   title: {
     fontFamily: FONTS.blackItalic,
-    fontSize: 36,
+    fontSize: 34,
     color: COLORS.white,
     textTransform: 'uppercase',
-    letterSpacing: -2,
+    letterSpacing: -1,
     paddingHorizontal: SPACING.lg,
+  },
+  subtitle: {
+    fontFamily: FONTS.medium,
+    fontSize: 13,
+    color: COLORS.gray[400],
+    lineHeight: 19,
+    paddingHorizontal: SPACING.lg,
+    marginTop: 4,
     marginBottom: SPACING.md,
   },
   tabs: { paddingHorizontal: SPACING.lg, gap: 8 },
   tab: {
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 9,
     backgroundColor: COLORS.bgCard,
-    borderRadius: 12,
+    borderRadius: RADIUS.full,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   tabActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
-  tabText: { fontFamily: FONTS.blackItalic, fontSize: 10, color: COLORS.gray[400], textTransform: 'uppercase', letterSpacing: 1 },
-
-  list: { padding: SPACING.lg, gap: 12, paddingBottom: 100 },
-  empty: { fontFamily: FONTS.boldItalic, fontSize: 11, color: COLORS.gray[600], textTransform: 'uppercase', textAlign: 'center', paddingVertical: 40 },
-
-  // Card
+  tabText: {
+    fontFamily: FONTS.blackItalic,
+    fontSize: 11,
+    color: COLORS.gray[400],
+    textTransform: 'uppercase',
+  },
+  tabTextActive: { color: '#000' },
+  list: { padding: SPACING.lg, gap: 12, paddingBottom: 110 },
+  emptyState: {
+    backgroundColor: COLORS.bgCard,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: SPACING.lg,
+    alignItems: 'center',
+  },
+  emptyTitle: {
+    fontFamily: FONTS.blackItalic,
+    fontSize: 16,
+    color: COLORS.white,
+    textTransform: 'uppercase',
+  },
+  emptyText: {
+    fontFamily: FONTS.medium,
+    fontSize: 12,
+    color: COLORS.gray[500],
+    textAlign: 'center',
+    marginTop: 6,
+    lineHeight: 18,
+  },
   card: {
     backgroundColor: COLORS.bgCard,
     borderRadius: RADIUS.xl,
@@ -213,51 +329,118 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
     ...SHADOW.card,
   },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  cardVenue: { fontFamily: FONTS.blackItalic, fontSize: 16, color: COLORS.white, textTransform: 'uppercase', letterSpacing: -0.5 },
-  cardAddressRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  cardAddress: { fontFamily: FONTS.boldItalic, fontSize: 10, color: COLORS.gray[500], flex: 1 },
-  statusBadge: { borderRadius: RADIUS.full, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 4 },
-  statusText: { fontFamily: FONTS.blackItalic, fontSize: 9, letterSpacing: 1 },
-
-  infoRow: {
+  cardTop: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+  },
+  cardTitleBlock: { flex: 1 },
+  venueName: {
+    fontFamily: FONTS.blackItalic,
+    fontSize: 17,
+    color: COLORS.white,
+    textTransform: 'uppercase',
+    letterSpacing: -0.5,
+  },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
+  address: {
+    flex: 1,
+    fontFamily: FONTS.medium,
+    fontSize: 11,
+    color: COLORS.gray[500],
+  },
+  statusBadge: {
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  statusText: {
+    fontFamily: FONTS.blackItalic,
+    fontSize: 9,
+    textTransform: 'uppercase',
+  },
+  infoBox: {
     backgroundColor: COLORS.bg,
     borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     padding: SPACING.md,
+    gap: 12,
+  },
+  infoItem: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  infoTextBlock: { flex: 1 },
+  infoLabel: {
+    fontFamily: FONTS.blackItalic,
+    fontSize: 8,
+    color: COLORS.gray[600],
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  infoValue: {
+    fontFamily: FONTS.bold,
+    fontSize: 13,
+    color: COLORS.white,
+    marginTop: 2,
+  },
+  phoneText: { color: COLORS.accent },
+  detailsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  detailPill: {
+    fontFamily: FONTS.blackItalic,
+    fontSize: 10,
+    color: COLORS.gray[100],
+    backgroundColor: COLORS.bg,
+    borderRadius: RADIUS.full,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    overflow: 'hidden',
+    textTransform: 'uppercase',
+  },
+  comment: {
+    fontFamily: FONTS.medium,
+    fontSize: 12,
+    color: COLORS.gray[400],
+    lineHeight: 18,
+  },
+  actions: { flexDirection: 'row', gap: 8 },
+  actionButton: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: RADIUS.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  secondaryButton: {
+    backgroundColor: COLORS.bg,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  infoItem: { flex: 1, alignItems: 'center' },
-  infoDivider: { width: 1, backgroundColor: COLORS.border },
-  infoLabel: { fontFamily: FONTS.blackItalic, fontSize: 8, color: COLORS.gray[600], textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
-  infoValue: { fontFamily: FONTS.blackItalic, fontSize: 14, color: COLORS.white },
-  infoSub: { fontFamily: FONTS.boldItalic, fontSize: 9, color: COLORS.gray[500], marginTop: 2 },
-
-  actions: { flexDirection: 'row', gap: 10 },
-  btnCancel: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'center',
+  confirmButton: { backgroundColor: COLORS.accent, ...SHADOW.accent },
+  iconButton: {
+    width: 44,
+    minHeight: 44,
+    borderRadius: RADIUS.md,
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(239,83,80,0.1)',
-    borderRadius: 14,
+    justifyContent: 'center',
     borderWidth: 1,
+  },
+  cancelButton: {
+    backgroundColor: 'rgba(239,83,80,0.08)',
     borderColor: 'rgba(239,83,80,0.3)',
   },
-  btnCancelText: { fontFamily: FONTS.blackItalic, fontSize: 11, color: COLORS.error, textTransform: 'uppercase' },
-  btnConfirm: {
-    flex: 2,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    backgroundColor: COLORS.accent,
-    borderRadius: 14,
-    ...SHADOW.accent,
+  secondaryButtonText: {
+    fontFamily: FONTS.blackItalic,
+    fontSize: 10,
+    color: COLORS.accent,
+    textTransform: 'uppercase',
   },
-  btnConfirmText: { fontFamily: FONTS.blackItalic, fontSize: 11, color: '#000', textTransform: 'uppercase' },
+  confirmButtonText: {
+    fontFamily: FONTS.blackItalic,
+    fontSize: 10,
+    color: '#000',
+    textTransform: 'uppercase',
+  },
 });

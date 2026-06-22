@@ -1,9 +1,18 @@
+import type { ComponentType } from 'react';
 import { Tabs } from 'expo-router';
 import { View, Text, StyleSheet } from 'react-native';
-import { BarChart2, Building2, CalendarDays, User } from 'lucide-react-native';
+import { Building2, CalendarDays, User } from 'lucide-react-native';
 import { COLORS, FONTS } from '@/constants/theme';
 
-function TabIcon({ icon: Icon, label, focused }: { icon: any; label: string; focused: boolean }) {
+function TabIcon({
+  icon: Icon,
+  label,
+  focused,
+}: {
+  icon: ComponentType<any>;
+  label: string;
+  focused: boolean;
+}) {
   return (
     <View style={styles.tabItem}>
       <Icon size={24} color={focused ? COLORS.accent : COLORS.gray[600]} strokeWidth={focused ? 3 : 2} />
@@ -15,17 +24,14 @@ function TabIcon({ icon: Icon, label, focused }: { icon: any; label: string; foc
 export default function OwnerLayout() {
   return (
     <Tabs screenOptions={{ headerShown: false, tabBarStyle: styles.tabBar, tabBarShowLabel: false }}>
+      <Tabs.Screen name="index" options={{ href: null }} />
       <Tabs.Screen
-        name="index"
-        options={{ tabBarIcon: ({ focused }) => <TabIcon icon={BarChart2} label="Дашборд" focused={focused} /> }}
+        name="bookings"
+        options={{ tabBarIcon: ({ focused }) => <TabIcon icon={CalendarDays} label="Заявки" focused={focused} /> }}
       />
       <Tabs.Screen
         name="venues"
         options={{ tabBarIcon: ({ focused }) => <TabIcon icon={Building2} label="Площадки" focused={focused} /> }}
-      />
-      <Tabs.Screen
-        name="bookings"
-        options={{ tabBarIcon: ({ focused }) => <TabIcon icon={CalendarDays} label="Брони" focused={focused} /> }}
       />
       <Tabs.Screen
         name="profile"
@@ -45,6 +51,12 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   tabItem: { alignItems: 'center', gap: 4 },
-  tabLabel: { fontFamily: FONTS.blackItalic, fontSize: 8, color: COLORS.gray[600], letterSpacing: 1, textTransform: 'uppercase' },
+  tabLabel: {
+    fontFamily: FONTS.blackItalic,
+    fontSize: 8,
+    color: COLORS.gray[600],
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
   tabLabelActive: { color: COLORS.accent },
 });

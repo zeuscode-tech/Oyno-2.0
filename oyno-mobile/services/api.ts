@@ -1,7 +1,8 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { AuthTokens, User, Game, Venue, Booking, ChatRoom, ChatMessage,
   DashboardStats, TimeSlot, CreateGamePayload, CreateBookingPayload,
-  PaginatedResponse, LoginPayload, RegisterPayload, PaymentMethod, SportId } from '@/types';
+  PaginatedResponse, LoginPayload, RegisterPayload, PaymentMethod, SportId,
+  BookingRequest, CreateBookingRequestPayload, BookingRequestStatus } from '@/types';
 import { API_BASE_URL } from '@/services/network';
 import { appStorage } from '@/services/storage';
 
@@ -170,6 +171,20 @@ export const bookingsApi = {
 
   cancel: (id: number) =>
     api.post<Booking>(`/bookings/${id}/cancel/`),
+};
+
+export const bookingRequestsApi = {
+  create: (payload: CreateBookingRequestPayload) =>
+    api.post<BookingRequest>('/bookings/requests/', payload),
+
+  mine: () =>
+    api.get<BookingRequest[]>('/bookings/requests/'),
+
+  ownerList: (params?: { status?: BookingRequestStatus }) =>
+    api.get<BookingRequest[]>('/bookings/requests/owner/', { params }),
+
+  updateOwnerStatus: (id: number, status: BookingRequestStatus) =>
+    api.patch<Pick<BookingRequest, 'status'>>(`/bookings/requests/owner/${id}/`, { status }),
 };
 
 // ── Users (search) ──────────────────────────────────

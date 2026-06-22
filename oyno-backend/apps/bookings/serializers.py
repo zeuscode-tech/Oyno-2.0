@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from apps.venues.serializers import VenueListSerializer, TimeSlotSerializer
 from apps.users.serializers import UserSerializer
-from .models import Booking
+from .models import Booking, BookingRequest
 
 
 class BookingSerializer(serializers.ModelSerializer):
@@ -52,3 +52,47 @@ class BookingCreateSerializer(serializers.Serializer):
             payment_method_id=validated_data["payment_method_id"],
             notes=validated_data.get("notes", ""),
         )
+
+
+class BookingRequestSerializer(serializers.ModelSerializer):
+    venue = VenueListSerializer(read_only=True)
+    venue_id = serializers.IntegerField(write_only=True)
+    customer_name = serializers.CharField(max_length=100)
+    phone = serializers.CharField(max_length=30)
+
+    class Meta:
+        model = BookingRequest
+        fields = [
+            "id", "venue", "venue_id", "customer_name", "phone",
+            "sport_id", "preferred_date", "preferred_time",
+            "players_count", "comment", "status", "created_at",
+        ]
+        read_only_fields = ["id", "venue", "status", "created_at"]
+
+    def validate_venue_id(self, value: int) -> int:
+        from apps.venues.models import Venue
+        if not Venue.objects.filter(id=value, is_active=True).exists():
+            raise serializers.ValidationError("Площадка не найдена.")
+        return value
+
+    def validate_phone(self, value: str) -> str:
+        value = value.strip()
+        if len(value) < 6:
+            raise serializers.ValidationError("Укажите телефон или WhatsApp.")
+        return value
+
+    def create(self, validated_data: dict) -> BookingRequest:
+        request = self.context.get("request")
+        user = request.user if request and request.user.is_authenticated else None
+        venue_id = validated_data.pop("venue_id")
+        return BookingRequest.objects.create(
+            venue_id=venue_id,
+            user=user,
+            **validated_data,
+        )
+
+
+class BookingRequestStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BookingRequest
+        fields = ["status"]

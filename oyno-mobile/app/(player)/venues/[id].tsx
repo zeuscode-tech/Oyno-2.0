@@ -1,658 +1,361 @@
-import { useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, TextInput,
-  StyleSheet, Image, Platform, Dimensions, Linking, ActivityIndicator,
+  ActivityIndicator,
+  Image,
+  Linking,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import Toast from 'react-native-toast-message';
-import {
-  ArrowLeft, MapPin, Star, Clock, Zap, Navigation, Send,
-} from 'lucide-react-native';
-import { venuesApi } from '@/services/api';
+import { ArrowLeft, CalendarDays, Check, MapPin, Navigation, Phone, Users } from 'lucide-react-native';
+import { bookingRequestsApi, venuesApi } from '@/services/api';
+import { useAuthStore } from '@/stores/authStore';
 import { COLORS, FONTS, RADIUS, SPACING, SHADOW } from '@/constants/theme';
-import { TimeSlot } from '@/types';
+import { CreateBookingRequestPayload } from '@/types';
 
-const { width } = Dimensions.get('window');
-
-// NOTE: 2GIS tiles можно подключить через кастомный MapView с urlTemplate:
-// https://tile2.maps.2gis.com/tiles?x={x}&y={y}&z={z}&v=1
+const SPORT_LABELS: Record<string, string> = {
+  football: 'Футбол',
+  basketball: 'Баскетбол',
+  volleyball: 'Волейбол',
+  tennis: 'Теннис',
+};
 
 export default function VenueDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const qc = useQueryClient();
-  const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split('T')[0]
-  );
-  const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
-  const [reviewRating, setReviewRating] = useState(5);
-  const [reviewText, setReviewText] = useState('');
+  const [requestOpen, setRequestOpen] = useState(false);
 
-  const { data: venueRes, isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['venue', id],
     queryFn: () => venuesApi.detail(Number(id)),
-  });
-
-  const { data: slotsRes } = useQuery({
-    queryKey: ['slots', id, selectedDate],
-    queryFn: () => venuesApi.slots(Number(id), selectedDate),
     enabled: !!id,
   });
 
-  const { data: reviewsRes } = useQuery({
-    queryKey: ['reviews', id],
-    queryFn: () => venuesApi.reviews(Number(id)),
-    enabled: !!id,
-  });
-  const reviews = reviewsRes?.data ?? [];
+  const venue = data?.data;
+  const amenities = venue?.amenities ?? [];
 
-  const { mutate: submitReview, isPending: submittingReview } = useMutation({
-    mutationFn: () => venuesApi.addReview(Number(id), { rating: reviewRating, text: reviewText.trim() }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['reviews', id] });
-      qc.invalidateQueries({ queryKey: ['venue', id] });
-      setReviewText('');
-      Toast.show({ type: 'success', text1: 'Отзыв добавлен!' });
-    },
-    onError: (e: any) => {
-      const msg = e?.response?.data?.non_field_errors?.[0] ?? 'Ошибка при добавлении отзыва';
-      Toast.show({ type: 'error', text1: msg });
-    },
-  });
+  const mapUrl = useMemo(() => {
+    if (!venue) return '';
+    if (venue.link_2gis) return venue.link_2gis;
+    return `https://2gis.kg/bishkek/search/${encodeURIComponent(venue.address || venue.name)}`;
+  }, [venue]);
 
-  const venue = venueRes?.data;
-  const venueAmenities = venue?.amenities ?? [];
-  const slots: TimeSlot[] = slotsRes?.data ?? [];
-
-  const openInMaps = () => {
-    if (!venue) return;
-    const lat = parseFloat(String(venue.lat));
-    const lng = parseFloat(String(venue.lng));
-    const encodedAddress = encodeURIComponent(venue.address);
-
-    const hasCoords = !isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0);
-
-    if (hasCoords) {
-      // 2GIS app: строим маршрут до точки
-      const url2gisRoute = `dgis://2gis.ru/routeSearch/rsType/car/to/${lng},${lat}`;
-      // 2GIS web fallback
-      const url2gisWeb = `https://2gis.ru/directions/auto/to/${lat}%2C${lng}`;
-      Linking.canOpenURL(url2gisRoute)
-        .then((supported) => Linking.openURL(supported ? url2gisRoute : url2gisWeb))
-        .catch(() => Linking.openURL(`https://2gis.ru/search/${encodedAddress}`));
-    } else {
-      // Нет координат — ищем по адресу владельца
-      const url2gisSearch = `dgis://2gis.ru/search/${encodedAddress}`;
-      Linking.canOpenURL(url2gisSearch)
-        .then((supported) =>
-          Linking.openURL(supported ? url2gisSearch : `https://2gis.ru/search/${encodedAddress}`)
-        )
-        .catch(() => {});
-    }
+  const openMap = () => {
+    if (mapUrl) Linking.openURL(mapUrl).catch(() => {});
   };
-
-  // 5 ближайших дней
-  const dates = Array.from({ length: 5 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() + i);
-    return { iso: d.toISOString().split('T')[0], d };
-  });
 
   if (isLoading || !venue) {
     return (
       <View style={styles.loadingRoot}>
-        <Text style={styles.loadingText}>Загрузка...</Text>
+        <ActivityIndicator color={COLORS.accent} size="large" />
       </View>
     );
   }
 
   return (
     <View style={styles.root}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Hero Image */}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         <View style={styles.hero}>
           {venue.images?.[0] ? (
-            <Image
-              source={{ uri: venue.images[0] }}
-              style={styles.heroImage}
-              resizeMode="cover"
-            />
+            <Image source={{ uri: venue.images[0] }} style={styles.heroImage} resizeMode="cover" />
           ) : (
-            <View style={[styles.heroImage, styles.heroPlaceholder]}>
-              <Text style={styles.heroPlaceholderEmoji}>🏟️</Text>
-              <Text style={styles.heroPlaceholderText}>{venue.name}</Text>
+            <View style={[styles.heroImage, styles.placeholder]}>
+              <Text style={styles.placeholderText}>OYNO</Text>
             </View>
           )}
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
             <ArrowLeft size={24} color="#fff" />
           </TouchableOpacity>
-
-          {/* Rating badge */}
-          <View style={styles.ratingBadge}>
-            <Star size={12} fill={COLORS.accent} color={COLORS.accent} />
-            <Text style={styles.ratingText}>{venue.rating}</Text>
-          </View>
         </View>
 
         <View style={styles.body}>
-          {/* Title */}
-          <Text style={styles.name}>{venue.name}</Text>
+          <Text style={styles.sport}>{SPORT_LABELS[venue.sport_id] ?? 'Спорт'}</Text>
+          <Text style={styles.title}>{venue.name}</Text>
           <View style={styles.addressRow}>
-            <MapPin size={14} color={COLORS.accent} />
+            <MapPin size={15} color={COLORS.accent} />
             <Text style={styles.address}>{venue.address}</Text>
           </View>
 
-          {/* Stats row */}
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Star size={16} color={COLORS.accent} fill={COLORS.accent} />
-              <Text style={styles.statValue}>{venue.rating}</Text>
-              <Text style={styles.statLabel}>{venue.reviews_count} отзывов</Text>
+          <View style={styles.stats}>
+            <View style={styles.stat}>
+              <Text style={styles.statValue}>{venue.price_per_hour}</Text>
+              <Text style={styles.statLabel}>сом/час</Text>
             </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Clock size={16} color={COLORS.accent} />
-              <Text style={styles.statValue}>{venue.working_hours?.open}–{venue.working_hours?.close}</Text>
-              <Text style={styles.statLabel}>Режим работы</Text>
+            <View style={styles.divider} />
+            <View style={styles.stat}>
+              <Text style={styles.statValue}>{venue.working_hours?.open ?? '08:00'}</Text>
+              <Text style={styles.statLabel}>открытие</Text>
             </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Zap size={16} color={COLORS.accent} />
-              <Text style={styles.statValue}>{venue.price_per_hour} сом</Text>
-              <Text style={styles.statLabel}>За час</Text>
+            <View style={styles.divider} />
+            <View style={styles.stat}>
+              <Text style={styles.statValue}>{venue.working_hours?.close ?? '22:00'}</Text>
+              <Text style={styles.statLabel}>закрытие</Text>
             </View>
           </View>
 
-          {/* Description */}
           {venue.description ? (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>ОПИСАНИЕ</Text>
+              <Text style={styles.sectionTitle}>Описание</Text>
               <Text style={styles.description}>{venue.description}</Text>
             </View>
           ) : null}
 
-          {/* Amenities */}
-          {venueAmenities.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>УДОБСТВА</Text>
-              <View style={styles.amenitiesRow}>
-                {venueAmenities.map((a) => (
-                  <View key={a} style={styles.amenityChip}>
-                    <Text style={styles.amenityText}>{a}</Text>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Удобства</Text>
+            {amenities.length > 0 ? (
+              <View style={styles.amenities}>
+                {amenities.map((item) => (
+                  <View key={item} style={styles.chip}>
+                    <Text style={styles.chipText}>{item}</Text>
                   </View>
                 ))}
               </View>
-            </View>
-          )}
-
-          {/* Map button */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>НА КАРТЕ</Text>
-            <TouchableOpacity style={styles.mapBtn} onPress={openInMaps} activeOpacity={0.85}>
-              <View style={styles.mapBtnIcon}>
-                <Navigation size={24} color="#000" />
-              </View>
-              <View style={styles.mapBtnInfo}>
-                <Text style={styles.mapBtnTitle}>Открыть маршрут</Text>
-                <Text style={styles.mapBtnAddr} numberOfLines={1}>{venue.address}</Text>
-              </View>
-              <MapPin size={20} color={COLORS.accent} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Reviews */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>ОТЗЫВЫ</Text>
-
-            {/* Add review */}
-            <View style={styles.reviewForm}>
-              <View style={styles.starsRow}>
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <TouchableOpacity key={s} onPress={() => setReviewRating(s)} activeOpacity={0.7}>
-                    <Star
-                      size={28}
-                      color={COLORS.accent}
-                      fill={s <= reviewRating ? COLORS.accent : 'transparent'}
-                    />
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <View style={styles.reviewInputRow}>
-                <TextInput
-                  style={styles.reviewInput}
-                  placeholder="Напиши отзыв..."
-                  placeholderTextColor={COLORS.gray[600]}
-                  value={reviewText}
-                  onChangeText={setReviewText}
-                  multiline
-                />
-                <TouchableOpacity
-                  style={styles.reviewSendBtn}
-                  onPress={() => submitReview()}
-                  disabled={submittingReview}
-                  activeOpacity={0.85}
-                >
-                  {submittingReview
-                    ? <ActivityIndicator size="small" color="#000" />
-                    : <Send size={18} color="#000" />}
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Reviews list */}
-            {reviews.length === 0 ? (
-              <Text style={styles.emptySlots}>Пока нет отзывов</Text>
             ) : (
-              reviews.map((r) => (
-                <View key={r.id} style={styles.reviewCard}>
-                  <View style={styles.reviewCardTop}>
-                    <Text style={styles.reviewAuthor}>{r.author_name}</Text>
-                    <View style={styles.reviewStarsBadge}>
-                      <Star size={10} color={COLORS.accent} fill={COLORS.accent} />
-                      <Text style={styles.reviewRatingText}>{r.rating}</Text>
-                    </View>
-                  </View>
-                  {r.text ? <Text style={styles.reviewText}>{r.text}</Text> : null}
-                </View>
-              ))
+              <Text style={styles.muted}>Удобства уточняются у площадки.</Text>
             )}
           </View>
 
-          {/* Date Picker */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>ВЫБЕРИ ДАТУ</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.datesRow}>
-                {dates.map(({ iso, d }) => {
-                  const isSelected = iso === selectedDate;
-                  return (
-                    <TouchableOpacity
-                      key={iso}
-                      style={[styles.dateBtn, isSelected && styles.dateBtnActive]}
-                      onPress={() => setSelectedDate(iso)}
-                    >
-                      <Text style={[styles.dateBtnDay, isSelected && { color: '#000' }]}>
-                        {d.toLocaleDateString('ru', { weekday: 'short' }).toUpperCase()}
-                      </Text>
-                      <Text style={[styles.dateBtnNum, isSelected && { color: '#000' }]}>
-                        {d.getDate()}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </ScrollView>
-          </View>
-
-          {/* Time Slots */}
-          <View style={[styles.section, { marginBottom: 120 }]}>
-            <Text style={styles.sectionTitle}>СВОБОДНОЕ ВРЕМЯ</Text>
-            <View style={styles.slotsGrid}>
-              {slots.map((slot) => {
-                const isSelected = selectedSlot?.id === slot.id;
-                return (
-                  <TouchableOpacity
-                    key={slot.id}
-                    style={[
-                      styles.slotBtn,
-                      !slot.is_available && styles.slotBtnDisabled,
-                      isSelected && styles.slotBtnActive,
-                    ]}
-                    onPress={() => slot.is_available && setSelectedSlot(slot)}
-                    disabled={!slot.is_available}
-                  >
-                    <Text style={[
-                      styles.slotTime,
-                      !slot.is_available && { color: COLORS.gray[600] },
-                      isSelected && { color: '#000' },
-                    ]}>
-                      {slot.start_time.slice(0, 5)}
-                    </Text>
-                    <Text style={[
-                      styles.slotPrice,
-                      !slot.is_available && { color: COLORS.gray[600] },
-                      isSelected && { color: 'rgba(0,0,0,0.7)' },
-                    ]}>
-                      {slot.is_available ? `${slot.price} с` : 'занят'}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-              {slots.length === 0 && (
-                <Text style={styles.emptySlots}>Нет доступных слотов</Text>
-              )}
+          <TouchableOpacity style={styles.mapButton} onPress={openMap} activeOpacity={0.85}>
+            <View style={styles.mapIcon}>
+              <Navigation size={22} color="#000" />
             </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.mapTitle}>Открыть в 2ГИС</Text>
+              <Text style={styles.mapSub} numberOfLines={1}>{venue.address}</Text>
+            </View>
+          </TouchableOpacity>
+
+          <View style={styles.noteBox}>
+            <Text style={styles.noteTitle}>Свободное время уточняется</Text>
+            <Text style={styles.noteText}>
+              Оставь заявку: мы или владелец площадки свяжемся с тобой и подтвердим время.
+            </Text>
           </View>
         </View>
       </ScrollView>
 
-      {/* Book Button */}
-      {selectedSlot && (
-        <View style={styles.footer}>
-          <View style={styles.footerInfo}>
-            <Text style={styles.footerSlotTime}>
-              {selectedSlot.start_time.slice(0, 5)} – {selectedSlot.end_time.slice(0, 5)}
-            </Text>
-            <Text style={styles.footerPrice}>{selectedSlot.price} сом</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.bookBtn}
-            onPress={() => router.push({
-              pathname: '/(player)/booking',
-              params: { venue_id: id, slot_id: String(selectedSlot.id) },
-            })}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.bookBtnText}>ЗАБРОНИРОВАТЬ</Text>
+      <View style={styles.footer}>
+        <TouchableOpacity style={styles.requestButton} onPress={() => setRequestOpen(true)} activeOpacity={0.9}>
+          <Text style={styles.requestButtonText}>Оставить заявку</Text>
+        </TouchableOpacity>
+      </View>
+
+      <BookingRequestModal
+        visible={requestOpen}
+        venueId={venue.id}
+        sportId={venue.sport_id}
+        venueName={venue.name}
+        onClose={() => setRequestOpen(false)}
+      />
+    </View>
+  );
+}
+
+function BookingRequestModal({
+  visible,
+  venueId,
+  sportId,
+  venueName,
+  onClose,
+}: {
+  visible: boolean;
+  venueId: number;
+  sportId: string;
+  venueName: string;
+  onClose: () => void;
+}) {
+  const user = useAuthStore((s) => s.user);
+  const [name, setName] = useState(user?.name ?? '');
+  const [phone, setPhone] = useState(user?.phone ?? '');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [time, setTime] = useState('19:00');
+  const [players, setPlayers] = useState('10');
+  const [comment, setComment] = useState('');
+
+  const { mutate, isPending } = useMutation({
+    mutationFn: () => {
+      const payload: CreateBookingRequestPayload = {
+        venue_id: venueId,
+        customer_name: name.trim(),
+        phone: phone.trim(),
+        sport_id: sportId as any,
+        preferred_date: date,
+        preferred_time: time.trim(),
+        players_count: Number(players) || undefined,
+        comment: comment.trim(),
+      };
+      return bookingRequestsApi.create(payload);
+    },
+    onSuccess: () => {
+      Toast.show({
+        type: 'success',
+        text1: 'Заявка отправлена',
+        text2: 'Скоро свяжемся и подтвердим время.',
+      });
+      setComment('');
+      onClose();
+    },
+    onError: (e: any) => {
+      const data = e?.response?.data;
+      const msg = typeof data === 'string' ? data : JSON.stringify(data ?? {});
+      Toast.show({ type: 'error', text1: 'Не удалось отправить заявку', text2: msg.slice(0, 80) });
+    },
+  });
+
+  const canSubmit = name.trim().length >= 2 && phone.trim().length >= 6;
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+      <View style={styles.modalRoot}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Заявка</Text>
+          <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <Text style={styles.closeText}>×</Text>
           </TouchableOpacity>
         </View>
-      )}
+        <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
+          <Text style={styles.modalVenue}>{venueName}</Text>
+
+          <Field icon={<Users size={16} color={COLORS.accent} />} label="Имя">
+            <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Как к вам обращаться" placeholderTextColor={COLORS.gray[600]} />
+          </Field>
+
+          <Field icon={<Phone size={16} color={COLORS.accent} />} label="Телефон / WhatsApp">
+            <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="+996..." placeholderTextColor={COLORS.gray[600]} keyboardType="phone-pad" />
+          </Field>
+
+          <Field icon={<CalendarDays size={16} color={COLORS.accent} />} label="Дата">
+            <TextInput style={styles.input} value={date} onChangeText={setDate} placeholder="2026-06-22" placeholderTextColor={COLORS.gray[600]} />
+          </Field>
+
+          <Field icon={<Check size={16} color={COLORS.accent} />} label="Желаемое время">
+            <TextInput style={styles.input} value={time} onChangeText={setTime} placeholder="19:00 или вечер" placeholderTextColor={COLORS.gray[600]} />
+          </Field>
+
+          <Field icon={<Users size={16} color={COLORS.accent} />} label="Сколько игроков">
+            <TextInput style={styles.input} value={players} onChangeText={(v) => setPlayers(v.replace(/\D/g, '').slice(0, 2))} keyboardType="number-pad" placeholder="10" placeholderTextColor={COLORS.gray[600]} />
+          </Field>
+
+          <Text style={styles.label}>Комментарий</Text>
+          <TextInput
+            style={[styles.input, styles.textarea]}
+            value={comment}
+            onChangeText={setComment}
+            placeholder="Например: нужен зал после 20:00, есть парковка?"
+            placeholderTextColor={COLORS.gray[600]}
+            multiline
+            textAlignVertical="top"
+          />
+
+          <TouchableOpacity
+            style={[styles.submitBtn, (!canSubmit || isPending) && { opacity: 0.5 }]}
+            onPress={() => canSubmit && mutate()}
+            disabled={!canSubmit || isPending}
+            activeOpacity={0.9}
+          >
+            {isPending ? <ActivityIndicator color="#000" /> : <Text style={styles.submitText}>Отправить заявку</Text>}
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
+function Field({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
+  return (
+    <View style={{ marginBottom: SPACING.md }}>
+      <View style={styles.fieldLabelRow}>
+        {icon}
+        <Text style={styles.label}>{label}</Text>
+      </View>
+      {children}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bg },
+  content: { paddingBottom: 110 },
   loadingRoot: { flex: 1, backgroundColor: COLORS.bg, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { fontFamily: FONTS.boldItalic, color: COLORS.gray[500], fontSize: 12, textTransform: 'uppercase' },
-
-  // Hero
   hero: { position: 'relative' },
-  heroImage: { width: '100%', height: 260 },
+  heroImage: { width: '100%', height: 280 },
+  placeholder: { backgroundColor: COLORS.bgCard, alignItems: 'center', justifyContent: 'center' },
+  placeholderText: { fontFamily: FONTS.blackItalic, fontSize: 34, color: COLORS.accent },
   backBtn: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 52 : 16,
+    top: Platform.OS === 'ios' ? 52 : 18,
     left: 16,
-    width: 48,
-    height: 48,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  ratingBadge: {
-    position: 'absolute',
-    bottom: 16,
-    right: 16,
-    backgroundColor: COLORS.accent,
-    borderRadius: RADIUS.full,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    ...SHADOW.accent,
-  },
-  ratingText: { fontFamily: FONTS.blackItalic, fontSize: 13, color: '#000' },
-
-  // Body
-  body: { padding: SPACING.lg },
-  name: {
-    fontFamily: FONTS.blackItalic,
-    fontSize: 32,
-    color: COLORS.white,
-    textTransform: 'uppercase',
-    letterSpacing: -1,
-    marginBottom: 8,
-  },
-  addressRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: SPACING.lg },
-  address: { fontFamily: FONTS.boldItalic, fontSize: 12, color: COLORS.gray[500], flex: 1 },
-
-  // Stats
-  statsRow: {
-    backgroundColor: COLORS.bgCard,
-    borderRadius: RADIUS.xl,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    flexDirection: 'row',
-    padding: SPACING.md,
-    marginBottom: SPACING.lg,
-    ...SHADOW.card,
-  },
-  statItem: { flex: 1, alignItems: 'center', gap: 4 },
-  statDivider: { width: 1, backgroundColor: COLORS.border },
-  statValue: { fontFamily: FONTS.blackItalic, fontSize: 14, color: COLORS.white },
-  statLabel: { fontFamily: FONTS.boldItalic, fontSize: 9, color: COLORS.gray[500], textTransform: 'uppercase' },
-
-  // Section
-  section: { marginBottom: SPACING.lg },
-  sectionTitle: {
-    fontFamily: FONTS.blackItalic,
-    fontSize: 11,
-    color: COLORS.accent,
-    letterSpacing: 3,
-    textTransform: 'uppercase',
-    marginBottom: SPACING.sm,
-  },
-  description: {
-    fontFamily: FONTS.boldItalic,
-    fontSize: 13,
-    color: COLORS.gray[400],
-    lineHeight: 20,
-  },
-
-  // Amenities
-  amenitiesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  amenityChip: {
-    backgroundColor: COLORS.bgCard,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.full,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  amenityText: { fontFamily: FONTS.boldItalic, fontSize: 11, color: COLORS.gray[400] },
-
-  // Hero placeholder
-  heroPlaceholder: {
-    backgroundColor: COLORS.bgCard,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  heroPlaceholderEmoji: { fontSize: 64, marginBottom: 8 },
-  heroPlaceholderText: {
-    fontFamily: FONTS.blackItalic,
-    fontSize: 16,
-    color: COLORS.white,
-    textTransform: 'uppercase',
-    letterSpacing: -0.5,
-  },
-
-  // Map button
-  mapBtn: {
-    backgroundColor: COLORS.bgCard,
-    borderRadius: RADIUS.xl,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: SPACING.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-    ...SHADOW.card,
-  },
-  mapBtnIcon: {
-    width: 52,
-    height: 52,
-    backgroundColor: COLORS.accent,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...SHADOW.accent,
-  },
-  mapBtnInfo: { flex: 1 },
-  mapBtnTitle: {
-    fontFamily: FONTS.blackItalic,
-    fontSize: 14,
-    color: COLORS.white,
-    textTransform: 'uppercase',
-  },
-  mapBtnAddr: {
-    fontFamily: FONTS.boldItalic,
-    fontSize: 11,
-    color: COLORS.gray[500],
-    marginTop: 3,
-  },
-
-  // Reviews
-  reviewForm: {
-    backgroundColor: COLORS.bgCard,
-    borderRadius: RADIUS.xl,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-    gap: SPACING.sm,
-  },
-  starsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  reviewInputRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: SPACING.sm,
-  },
-  reviewInput: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 10,
-    color: COLORS.white,
-    fontFamily: FONTS.bold,
-    fontSize: 13,
-    minHeight: 44,
-    maxHeight: 80,
-  },
-  reviewSendBtn: {
-    width: 44,
-    height: 44,
-    backgroundColor: COLORS.accent,
+    width: 46,
+    height: 46,
     borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    ...SHADOW.accent,
   },
-  reviewCard: {
+  body: { padding: SPACING.lg },
+  sport: { fontFamily: FONTS.blackItalic, fontSize: 10, color: COLORS.accent, letterSpacing: 3, textTransform: 'uppercase' },
+  title: { fontFamily: FONTS.blackItalic, fontSize: 32, color: COLORS.white, textTransform: 'uppercase', letterSpacing: -1, marginTop: 4 },
+  addressRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
+  address: { flex: 1, fontFamily: FONTS.bold, fontSize: 13, color: COLORS.gray[400] },
+  stats: {
+    marginTop: SPACING.lg,
     backgroundColor: COLORS.bgCard,
-    borderRadius: RADIUS.lg,
     borderWidth: 1,
     borderColor: COLORS.border,
+    borderRadius: RADIUS.xl,
+    flexDirection: 'row',
     padding: SPACING.md,
-    marginBottom: 8,
+    ...SHADOW.card,
   },
-  reviewCardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  reviewAuthor: {
-    fontFamily: FONTS.blackItalic,
-    fontSize: 13,
-    color: COLORS.white,
-    textTransform: 'uppercase',
-    letterSpacing: -0.3,
-  },
-  reviewStarsBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(198,255,0,0.1)',
-    borderRadius: RADIUS.full,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  reviewRatingText: {
-    fontFamily: FONTS.blackItalic,
-    fontSize: 11,
-    color: COLORS.accent,
-  },
-  reviewText: {
-    fontFamily: FONTS.boldItalic,
-    fontSize: 12,
-    color: COLORS.gray[400],
-    lineHeight: 18,
-  },
-
-  // Dates
-  datesRow: { flexDirection: 'row', gap: 10 },
-  dateBtn: {
-    width: 56,
-    paddingVertical: 12,
+  stat: { flex: 1, alignItems: 'center' },
+  statValue: { fontFamily: FONTS.blackItalic, fontSize: 16, color: COLORS.white },
+  statLabel: { fontFamily: FONTS.blackItalic, fontSize: 9, color: COLORS.gray[500], textTransform: 'uppercase', marginTop: 3 },
+  divider: { width: 1, backgroundColor: COLORS.border },
+  section: { marginTop: SPACING.xl },
+  sectionTitle: { fontFamily: FONTS.blackItalic, fontSize: 13, color: COLORS.accent, letterSpacing: 2, textTransform: 'uppercase', marginBottom: SPACING.sm },
+  description: { fontFamily: FONTS.bold, fontSize: 14, lineHeight: 21, color: COLORS.gray[400] },
+  muted: { fontFamily: FONTS.bold, fontSize: 13, color: COLORS.gray[500] },
+  amenities: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.full, paddingHorizontal: 12, paddingVertical: 7 },
+  chipText: { fontFamily: FONTS.bold, fontSize: 12, color: COLORS.gray[400] },
+  mapButton: {
+    marginTop: SPACING.xl,
     backgroundColor: COLORS.bgCard,
-    borderRadius: RADIUS.md,
     borderWidth: 1,
     borderColor: COLORS.border,
-    alignItems: 'center',
-    gap: 4,
-  },
-  dateBtnActive: {
-    backgroundColor: COLORS.accent,
-    borderColor: COLORS.accent,
-    ...SHADOW.accent,
-  },
-  dateBtnDay: { fontFamily: FONTS.blackItalic, fontSize: 9, color: COLORS.gray[500], textTransform: 'uppercase' },
-  dateBtnNum: { fontFamily: FONTS.blackItalic, fontSize: 18, color: COLORS.white },
-
-  // Slots
-  slotsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  slotBtn: {
-    width: '30%',
-    backgroundColor: COLORS.bgCard,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingVertical: 12,
-    alignItems: 'center',
-    gap: 2,
-  },
-  slotBtnActive: {
-    backgroundColor: COLORS.accent,
-    borderColor: COLORS.accent,
-    ...SHADOW.accent,
-  },
-  slotBtnDisabled: { opacity: 0.4 },
-  slotTime: { fontFamily: FONTS.blackItalic, fontSize: 14, color: COLORS.white },
-  slotPrice: { fontFamily: FONTS.boldItalic, fontSize: 10, color: COLORS.gray[500] },
-  emptySlots: {
-    fontFamily: FONTS.boldItalic,
-    fontSize: 11,
-    color: COLORS.gray[600],
-    textTransform: 'uppercase',
-    textAlign: 'center',
-    paddingVertical: 20,
-    width: '100%',
-  },
-
-  // Footer
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: COLORS.bg,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    padding: SPACING.lg,
-    paddingBottom: Platform.OS === 'ios' ? 36 : SPACING.lg,
+    borderRadius: RADIUS.xl,
+    padding: SPACING.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.md,
   },
-  footerInfo: { flex: 1 },
-  footerSlotTime: { fontFamily: FONTS.blackItalic, fontSize: 16, color: COLORS.white },
-  footerPrice: { fontFamily: FONTS.boldItalic, fontSize: 12, color: COLORS.accent, marginTop: 2 },
-  bookBtn: {
-    backgroundColor: COLORS.accent,
-    borderRadius: RADIUS.xl,
-    paddingHorizontal: SPACING.xl,
-    paddingVertical: 18,
-    ...SHADOW.accent,
-  },
-  bookBtnText: { fontFamily: FONTS.blackItalic, fontSize: 13, color: '#000', letterSpacing: 1 },
+  mapIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: COLORS.accent, alignItems: 'center', justifyContent: 'center' },
+  mapTitle: { fontFamily: FONTS.blackItalic, fontSize: 14, color: COLORS.white, textTransform: 'uppercase' },
+  mapSub: { fontFamily: FONTS.bold, fontSize: 11, color: COLORS.gray[500], marginTop: 3 },
+  noteBox: { marginTop: SPACING.lg, borderRadius: RADIUS.xl, padding: SPACING.md, backgroundColor: 'rgba(198,255,0,0.08)', borderWidth: 1, borderColor: 'rgba(198,255,0,0.22)' },
+  noteTitle: { fontFamily: FONTS.blackItalic, fontSize: 14, color: COLORS.accent, textTransform: 'uppercase' },
+  noteText: { fontFamily: FONTS.bold, fontSize: 13, color: COLORS.gray[400], lineHeight: 19, marginTop: 6 },
+  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: SPACING.lg, paddingBottom: Platform.OS === 'ios' ? 34 : SPACING.lg, backgroundColor: COLORS.bg, borderTopWidth: 1, borderTopColor: COLORS.border },
+  requestButton: { backgroundColor: COLORS.accent, borderRadius: RADIUS.xl, paddingVertical: 18, alignItems: 'center', ...SHADOW.accent },
+  requestButtonText: { fontFamily: FONTS.blackItalic, fontSize: 14, color: '#000', textTransform: 'uppercase', letterSpacing: 1.5 },
+  modalRoot: { flex: 1, backgroundColor: COLORS.bg, paddingTop: Platform.OS === 'ios' ? 20 : SPACING.lg },
+  modalHeader: { paddingHorizontal: SPACING.lg, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  modalTitle: { fontFamily: FONTS.blackItalic, fontSize: 28, color: COLORS.white, textTransform: 'uppercase' },
+  closeBtn: { width: 42, height: 42, borderRadius: 14, backgroundColor: COLORS.bgCard, alignItems: 'center', justifyContent: 'center' },
+  closeText: { fontSize: 28, color: COLORS.white, lineHeight: 30 },
+  modalContent: { padding: SPACING.lg, paddingBottom: 40 },
+  modalVenue: { fontFamily: FONTS.bold, fontSize: 13, color: COLORS.gray[400], marginBottom: SPACING.lg },
+  fieldLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  label: { fontFamily: FONTS.blackItalic, fontSize: 10, color: COLORS.accent, letterSpacing: 2, textTransform: 'uppercase' },
+  input: { backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 13, color: COLORS.white, fontFamily: FONTS.bold, fontSize: 15 },
+  textarea: { height: 90, marginTop: 8, paddingTop: 13 },
+  submitBtn: { marginTop: SPACING.xl, backgroundColor: COLORS.accent, borderRadius: RADIUS.xl, paddingVertical: 18, alignItems: 'center', ...SHADOW.accent },
+  submitText: { fontFamily: FONTS.blackItalic, fontSize: 14, color: '#000', textTransform: 'uppercase', letterSpacing: 1.5 },
 });

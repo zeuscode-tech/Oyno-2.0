@@ -4,8 +4,11 @@ from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 from django_filters.rest_framework import DjangoFilterBackend
 
-from .models import Booking
-from .serializers import BookingSerializer, BookingCreateSerializer
+from .models import Booking, BookingRequest
+from .serializers import (
+    BookingSerializer, BookingCreateSerializer,
+    BookingRequestSerializer, BookingRequestStatusSerializer,
+)
 from apps.notifications.tasks import send_push
 
 
@@ -112,3 +115,49 @@ class BookingViewSet(GenericViewSet):
         return Booking.objects.filter(pk=pk, venue_id__in=venue_ids).select_related(
             "venue", "slot", "user"
         ).first()
+
+
+class BookingRequestListCreateView(generics.ListCreateAPIView):
+    serializer_class = BookingRequestSerializer
+
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = BookingRequest.objects.select_related("venue", "user")
+        if not user.is_authenticated:
+            return BookingRequest.objects.none()
+        if user.is_staff:
+            return qs
+        return qs.filter(user=user)
+
+    def perform_create(self, serializer):
+        serializer.save()
+
+
+class OwnerBookingRequestListView(generics.ListAPIView):
+    serializer_class = BookingRequestSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        from apps.venues.models import Venue
+        venue_ids = Venue.objects.filter(owner=self.request.user).values_list("id", flat=True)
+        qs = BookingRequest.objects.filter(venue_id__in=venue_ids).select_related("venue", "user")
+        status_filter = self.request.query_params.get("status")
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        return qs
+
+
+class OwnerBookingRequestStatusView(generics.UpdateAPIView):
+    serializer_class = BookingRequestStatusSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ["patch"]
+
+    def get_queryset(self):
+        from apps.venues.models import Venue
+        venue_ids = Venue.objects.filter(owner=self.request.user).values_list("id", flat=True)
+        return BookingRequest.objects.filter(venue_id__in=venue_ids)

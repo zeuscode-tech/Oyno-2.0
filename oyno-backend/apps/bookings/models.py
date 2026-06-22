@@ -65,3 +65,47 @@ class Booking(models.Model):
         # Освобождаем слот
         self.slot.is_available = True
         self.slot.save(update_fields=["is_available"])
+
+
+class BookingRequest(models.Model):
+    class Status(models.TextChoices):
+        NEW = "new", "Новая"
+        CONTACTED = "contacted", "Связались"
+        CONFIRMED = "confirmed", "Подтверждена"
+        CANCELLED = "cancelled", "Отменена"
+
+    venue = models.ForeignKey(
+        "venues.Venue",
+        on_delete=models.CASCADE,
+        related_name="booking_requests",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="booking_requests",
+    )
+    customer_name = models.CharField(max_length=100)
+    phone = models.CharField(max_length=30)
+    sport_id = models.CharField(max_length=20, blank=True)
+    preferred_date = models.DateField(null=True, blank=True)
+    preferred_time = models.CharField(max_length=40, blank=True)
+    players_count = models.PositiveSmallIntegerField(null=True, blank=True)
+    comment = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.NEW)
+    source = models.CharField(max_length=30, default="mobile")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Заявка на бронь"
+        verbose_name_plural = "Заявки на бронь"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["venue", "status"]),
+            models.Index(fields=["phone", "created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"Заявка #{self.id} - {self.venue.name} [{self.status}]"

@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { Redirect } from 'expo-router';
 import { View, ActivityIndicator } from 'react-native';
 import { useAuthStore } from '@/stores/authStore';
@@ -15,7 +14,7 @@ export default function Index() {
     );
   }
 
-  if (!isAuthenticated) return <Redirect href="/(auth)/login" />;
+  if (!isAuthenticated) return <Redirect href="/(player)" />;
   if (activeRole === 'venue_owner') return <Redirect href="/(owner)" />;
   return <Redirect href="/(player)" />;
 }

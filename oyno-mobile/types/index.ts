@@ -146,6 +146,33 @@ export interface CreateBookingPayload {
   payment_method_id: string;
 }
 
+export type BookingRequestStatus = 'new' | 'contacted' | 'confirmed' | 'cancelled';
+
+export interface BookingRequest {
+  id: number;
+  venue: Pick<Venue, 'id' | 'name' | 'address' | 'images' | 'price_per_hour'>;
+  customer_name: string;
+  phone: string;
+  sport_id: SportId | '';
+  preferred_date: string | null;
+  preferred_time: string;
+  players_count: number | null;
+  comment: string;
+  status: BookingRequestStatus;
+  created_at: string;
+}
+
+export interface CreateBookingRequestPayload {
+  venue_id: number;
+  customer_name: string;
+  phone: string;
+  sport_id?: SportId | '';
+  preferred_date?: string;
+  preferred_time?: string;
+  players_count?: number;
+  comment?: string;
+}
+
 // ── Chats ────────────────────────────────────────────
 export type ChatType = 'game' | 'direct' | 'venue';
 
