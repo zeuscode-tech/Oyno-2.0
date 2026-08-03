@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   ScrollView, Platform, ActivityIndicator, SafeAreaView,
@@ -6,15 +5,14 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import Toast from 'react-native-toast-message';
-import { ArrowLeft, CreditCard, CheckCircle } from 'lucide-react-native';
-import { venuesApi, bookingsApi, paymentsApi } from '@/services/api';
+import { ArrowLeft, CheckCircle } from 'lucide-react-native';
+import { venuesApi, bookingsApi } from '@/services/api';
+import { trackEvent } from '@/services/analytics';
 import { COLORS, FONTS, RADIUS, SPACING, SHADOW } from '@/constants/theme';
-import { PaymentMethod } from '@/types';
+import { TimeSlot } from '@/types';
 
 export default function BookingScreen() {
   const { venue_id, slot_id } = useLocalSearchParams<{ venue_id: string; slot_id: string }>();
-  const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
-
   const { data: venueRes, isLoading: venueLoading } = useQuery({
     queryKey: ['venue', venue_id],
     queryFn: () => venuesApi.detail(Number(venue_id)),
@@ -28,27 +26,19 @@ export default function BookingScreen() {
     enabled: !!venue_id,
   });
 
-  const { data: methodsRes, isLoading: methodsLoading } = useQuery({
-    queryKey: ['payment-methods'],
-    queryFn: () => paymentsApi.methods(),
-  });
-
   const venue = venueRes?.data;
-  const rawSlots = slotsRes?.data as any;
-  const slotsArray = Array.isArray(rawSlots) ? rawSlots : (rawSlots?.results ?? []);
-  const slot = slotsArray.find((s: any) => String(s.id) === String(slot_id));
-  const rawMethods = methodsRes?.data as any;
-  const methods: PaymentMethod[] = Array.isArray(rawMethods) ? rawMethods : (rawMethods?.results ?? []);
-  const isLoading = venueLoading || slotsLoading || methodsLoading;
+  const slots = slotsRes?.data ?? [];
+  const slot: TimeSlot | undefined = slots.find((candidate) => String(candidate.id) === String(slot_id));
+  const isLoading = venueLoading || slotsLoading;
 
   const { mutate: book, isPending } = useMutation({
     mutationFn: () =>
       bookingsApi.create({
         venue_id: Number(venue_id),
         slot_id: Number(slot_id),
-        payment_method_id: selectedMethodId!,
       }),
     onSuccess: () => {
+      trackEvent('booking_created', { venue_id: Number(venue_id), slot_id: Number(slot_id) });
       Toast.show({
         type: 'success',
         text1: 'Бронирование создано!',
@@ -107,39 +97,15 @@ export default function BookingScreen() {
           </View>
         )}
 
-        {/* Payment methods */}
-        <Text style={styles.sectionTitle}>СПОСОБ ОПЛАТЫ</Text>
-
-        {methods.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <CreditCard size={28} color={COLORS.gray[600]} />
-            <Text style={styles.emptyText}>Нет сохранённых карт</Text>
-            <Text style={styles.emptySub}>Добавьте карту в профиле</Text>
+        <View style={styles.requestCard}>
+          <CheckCircle size={24} color={COLORS.accent} />
+          <View style={styles.requestInfo}>
+            <Text style={styles.requestTitle}>Оплата после подтверждения</Text>
+            <Text style={styles.requestText}>
+              Сначала владелец подтвердит заявку. Способ оплаты согласуем в чате.
+            </Text>
           </View>
-        ) : (
-          methods.map((m) => {
-            const active = selectedMethodId === m.id;
-            return (
-              <TouchableOpacity
-                key={m.id}
-                style={[styles.methodCard, active && styles.methodCardActive]}
-                onPress={() => setSelectedMethodId(m.id)}
-                activeOpacity={0.85}
-              >
-                <CreditCard size={20} color={active ? '#000' : COLORS.gray[400]} />
-                <View style={styles.methodInfo}>
-                  <Text style={[styles.methodLabel, active && { color: '#000' }]}>
-                    {m.label}
-                  </Text>
-                  <Text style={[styles.methodLast4, active && { color: 'rgba(0,0,0,0.6)' }]}>
-                    •••• {m.last4}
-                  </Text>
-                </View>
-                {active && <CheckCircle size={20} color="#000" />}
-              </TouchableOpacity>
-            );
-          })
-        )}
+        </View>
 
         {/* Total */}
         {slot && (
@@ -155,10 +121,10 @@ export default function BookingScreen() {
         <TouchableOpacity
           style={[
             styles.bookBtn,
-            (!selectedMethodId || isPending) && styles.bookBtnDisabled,
+            (!slot || isPending) && styles.bookBtnDisabled,
           ]}
           onPress={() => book()}
-          disabled={!selectedMethodId || isPending}
+          disabled={!slot || isPending}
           activeOpacity={0.85}
         >
           {isPending ? (
@@ -239,12 +205,28 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  sectionTitle: {
+  requestCard: {
+    backgroundColor: COLORS.bgCard,
+    borderRadius: RADIUS.xl,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.md,
+  },
+  requestInfo: { flex: 1 },
+  requestTitle: {
     fontFamily: FONTS.blackItalic,
-    fontSize: 9,
-    color: COLORS.accent,
-    letterSpacing: 3,
+    fontSize: 14,
+    color: COLORS.white,
     textTransform: 'uppercase',
+  },
+  requestText: {
+    fontFamily: FONTS.boldItalic,
+    fontSize: 11,
+    lineHeight: 17,
+    color: COLORS.gray[500],
     marginTop: 4,
   },
 

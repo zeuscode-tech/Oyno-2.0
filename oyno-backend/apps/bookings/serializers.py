@@ -1,6 +1,8 @@
+from django.db import IntegrityError, transaction
 from rest_framework import serializers
-from apps.venues.serializers import VenueListSerializer, TimeSlotSerializer
+
 from apps.users.serializers import UserSerializer
+from apps.venues.serializers import TimeSlotSerializer, VenueListSerializer
 from .models import Booking, BookingRequest
 
 
@@ -12,31 +14,30 @@ class BookingSerializer(serializers.ModelSerializer):
     class Meta:
         model = Booking
         fields = [
-            "id", "venue", "user", "slot",
-            "status", "payment_status", "total_price",
-            "notes", "created_at",
+            "id", "venue", "user", "slot", "status", "payment_status",
+            "total_price", "notes", "created_at",
         ]
-        read_only_fields = ["id", "status", "payment_status", "total_price", "created_at"]
+        read_only_fields = [
+            "id", "status", "payment_status", "total_price", "created_at",
+        ]
 
 
 class BookingCreateSerializer(serializers.Serializer):
     venue_id = serializers.IntegerField()
     slot_id = serializers.IntegerField()
-    payment_method_id = serializers.CharField()
+    payment_method_id = serializers.CharField(required=False, allow_blank=True)
     notes = serializers.CharField(required=False, allow_blank=True)
 
     def validate(self, attrs: dict) -> dict:
-        from apps.venues.models import TimeSlot, Venue
+        from apps.venues.models import TimeSlot
+
         try:
-            slot = TimeSlot.objects.select_related("venue").get(id=attrs["slot_id"])
-        except TimeSlot.DoesNotExist:
-            raise serializers.ValidationError({"slot_id": "Слот не найден."})
-
-        if not slot.is_available:
-            raise serializers.ValidationError({"slot_id": "Слот уже занят."})
-
-        if slot.venue_id != attrs["venue_id"]:
-            raise serializers.ValidationError({"slot_id": "Слот не принадлежит этой площадке."})
+            slot = TimeSlot.objects.select_related("venue").get(
+                id=attrs["slot_id"],
+                venue_id=attrs["venue_id"],
+            )
+        except TimeSlot.DoesNotExist as exc:
+            raise serializers.ValidationError({"slot_id": "Слот не найден."}) from exc
 
         attrs["slot"] = slot
         attrs["venue"] = slot.venue
@@ -44,14 +45,29 @@ class BookingCreateSerializer(serializers.Serializer):
         return attrs
 
     def create(self, validated_data: dict) -> Booking:
-        return Booking.objects.create(
-            user=self.context["request"].user,
-            venue=validated_data["venue"],
-            slot=validated_data["slot"],
-            total_price=validated_data["total_price"],
-            payment_method_id=validated_data["payment_method_id"],
-            notes=validated_data.get("notes", ""),
-        )
+        from apps.venues.models import TimeSlot
+
+        try:
+            with transaction.atomic():
+                slot = TimeSlot.objects.select_for_update().select_related("venue").get(
+                    pk=validated_data["slot"].pk,
+                )
+                if not slot.is_available:
+                    raise serializers.ValidationError({"slot_id": "Слот уже занят."})
+
+                booking = Booking.objects.create(
+                    user=self.context["request"].user,
+                    venue=slot.venue,
+                    slot=slot,
+                    total_price=slot.price,
+                    payment_method_id=validated_data.get("payment_method_id", ""),
+                    notes=validated_data.get("notes", ""),
+                )
+                slot.is_available = False
+                slot.save(update_fields=["is_available"])
+                return booking
+        except IntegrityError as exc:
+            raise serializers.ValidationError({"slot_id": "Слот уже занят."}) from exc
 
 
 class BookingRequestSerializer(serializers.ModelSerializer):
@@ -63,14 +79,15 @@ class BookingRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = BookingRequest
         fields = [
-            "id", "venue", "venue_id", "customer_name", "phone",
-            "sport_id", "preferred_date", "preferred_time",
-            "players_count", "comment", "status", "created_at",
+            "id", "venue", "venue_id", "customer_name", "phone", "sport_id",
+            "preferred_date", "preferred_time", "players_count", "comment",
+            "status", "created_at",
         ]
         read_only_fields = ["id", "venue", "status", "created_at"]
 
     def validate_venue_id(self, value: int) -> int:
         from apps.venues.models import Venue
+
         if not Venue.objects.filter(id=value, is_active=True).exists():
             raise serializers.ValidationError("Площадка не найдена.")
         return value

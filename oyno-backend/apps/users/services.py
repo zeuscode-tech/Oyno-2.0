@@ -1,4 +1,4 @@
-import random
+import secrets
 import string
 import requests
 from django.conf import settings
@@ -8,7 +8,7 @@ from .models import OTPCode
 
 
 def generate_otp() -> str:
-    return "".join(random.choices(string.digits, k=settings.OTP_LENGTH))
+    return "".join(secrets.choice(string.digits) for _ in range(settings.OTP_LENGTH))
 
 
 def send_otp_sms(phone: str, code: str) -> bool:
@@ -18,14 +18,23 @@ def send_otp_sms(phone: str, code: str) -> bool:
         print(f"[DEV] OTP для {phone}: {code}")
         return True
 
+    if not all((settings.SMS_API_URL, settings.SMS_EMAIL, settings.SMS_PASSWORD)):
+        print("[SMS ERROR] SMS provider is not configured: set SMS_API_URL, SMS_EMAIL and SMS_PASSWORD")
+        return False
+
     try:
         # Получаем токен Eskiz
+        auth_url = f"{settings.SMS_API_URL.removesuffix('/message/sms/send')}/auth/login"
         auth_resp = requests.post(
-            f"{settings.SMS_API_URL.rstrip('/message/sms/send')}/auth/login",
+            auth_url,
             data={"email": settings.SMS_EMAIL, "password": settings.SMS_PASSWORD},
             timeout=10,
         )
+        auth_resp.raise_for_status()
         token = auth_resp.json().get("data", {}).get("token", "")
+        if not token:
+            print("[SMS ERROR] SMS provider returned no auth token")
+            return False
 
         resp = requests.post(
             settings.SMS_API_URL,
@@ -33,22 +42,32 @@ def send_otp_sms(phone: str, code: str) -> bool:
             data={
                 "mobile_phone": phone.lstrip("+"),
                 "message": f"Ваш код OYNO: {code}. Не передавайте никому.",
-                "from": "4546",
+                "from": settings.SMS_SENDER,
             },
             timeout=10,
         )
-        return resp.status_code == 200
+        resp.raise_for_status()
+        return True
     except Exception as e:
         print(f"[SMS ERROR] {e}")
         return False
 
 
 def create_otp(phone: str) -> str:
-    # Деактивируем старые коды
-    OTPCode.objects.filter(phone=phone, is_used=False).update(is_used=True)
+    recent_since = timezone.now() - timedelta(minutes=10)
+    recent_count = OTPCode.objects.filter(
+        phone=phone,
+        created_at__gte=recent_since,
+    ).count()
+    if recent_count >= 5:
+        raise ValueError("Слишком много запросов. Попробуйте через 10 минут.")
+
     code = generate_otp()
+    if not send_otp_sms(phone, code):
+        raise RuntimeError("Не удалось отправить SMS-код.")
+
+    OTPCode.objects.filter(phone=phone, is_used=False).update(is_used=True)
     OTPCode.objects.create(phone=phone, code=code)
-    send_otp_sms(phone, code)
     return code
 
 

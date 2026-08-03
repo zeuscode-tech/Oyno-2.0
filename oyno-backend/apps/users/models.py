@@ -43,6 +43,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         OTHER = "other", "Другое"
 
     phone = models.CharField(max_length=20, unique=True)
+    phone_verified_at = models.DateTimeField(null=True, blank=True)
     name = models.CharField(max_length=100)
     username = models.CharField(max_length=50, unique=True, null=True, blank=True)
     avatar = models.ImageField(upload_to="avatars/", null=True, blank=True)

@@ -4,6 +4,8 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django.utils import timezone
+from django.db import transaction
+from django.db.models import Prefetch
 
 from .models import Game, GameParticipant
 from .serializers import GameListSerializer, GameDetailSerializer, GameCreateSerializer
@@ -14,7 +16,12 @@ class GameViewSet(viewsets.ModelViewSet):
         Game.objects
         .exclude(status=Game.Status.CANCELLED)
         .select_related("venue", "organizer", "chat_room")
-        .prefetch_related("participants")
+        .prefetch_related(
+            Prefetch(
+                "participants",
+                queryset=GameParticipant.objects.select_related("user"),
+            )
+        )
     )
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ["sport_id", "status", "level"]
@@ -45,7 +52,12 @@ class GameViewSet(viewsets.ModelViewSet):
         qs = Game.objects.filter(
             participants__user=request.user,
             participants__is_active=True,
-        ).select_related("venue", "organizer", "chat_room").distinct()
+        ).select_related("venue", "organizer", "chat_room").prefetch_related(
+            Prefetch(
+                "participants",
+                queryset=GameParticipant.objects.select_related("user"),
+            )
+        ).distinct()
 
         status_filter = request.query_params.get("status")
         if status_filter:
@@ -56,26 +68,36 @@ class GameViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def join(self, request, pk=None):
-        game: Game = self.get_object()
+        game = self.get_object()
+        with transaction.atomic():
+            game = Game.objects.select_for_update().get(pk=game.pk)
+            active_players = GameParticipant.objects.filter(
+                game=game,
+                is_active=True,
+            ).count()
+            if active_players >= game.players_total:
+                return Response({"detail": "Игра уже заполнена."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if game.players_joined >= game.players_total:
-            return Response({"detail": "Игра уже заполнена."}, status=status.HTTP_400_BAD_REQUEST)
+            participant, created = GameParticipant.objects.get_or_create(
+                game=game, user=request.user,
+                defaults={"is_active": True},
+            )
+            if not created and participant.is_active:
+                return Response({"detail": "Ты уже в игре."}, status=status.HTTP_400_BAD_REQUEST)
 
-        participant, created = GameParticipant.objects.get_or_create(
-            game=game, user=request.user,
-            defaults={"is_active": True},
-        )
-        if not created and participant.is_active:
-            return Response({"detail": "Ты уже в игре."}, status=status.HTTP_400_BAD_REQUEST)
+            participant.is_active = True
+            participant.save(update_fields=["is_active"])
 
-        participant.is_active = True
-        participant.save(update_fields=["is_active"])
+            game.status = (
+                Game.Status.CONFIRMED
+                if active_players + 1 >= game.players_total
+                else Game.Status.WAITING
+            )
+            game.save(update_fields=["status"])
 
         # Добавляем в чат
         if game.chat_room:
             game.chat_room.participants.add(request.user)
-
-        game.update_status()
 
         # Push-уведомление организатору
         from apps.notifications.tasks import send_push

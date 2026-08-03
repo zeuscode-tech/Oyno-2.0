@@ -24,6 +24,12 @@ class GameListSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if not request or not request.user.is_authenticated:
             return False
+        prefetched_participants = obj._prefetched_objects_cache.get("participants") if hasattr(obj, "_prefetched_objects_cache") else None
+        if prefetched_participants is not None:
+            return any(
+                participant.user_id == request.user.id and participant.is_active
+                for participant in prefetched_participants
+            )
         return obj.participants.filter(user=request.user, is_active=True).exists()
 
 

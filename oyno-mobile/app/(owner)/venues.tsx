@@ -5,15 +5,14 @@ import {
   ScrollView, ActivityIndicator, KeyboardAvoidingView,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { Plus, Star, Edit, BarChart2, X, Camera } from 'lucide-react-native';
+import { Plus, Star, Edit, CalendarDays, X, Camera } from 'lucide-react-native';
 import Toast from 'react-native-toast-message';
 import { venuesApi } from '@/services/api';
 import { COLORS, FONTS, RADIUS, SPACING, SHADOW } from '@/constants/theme';
-import { Venue } from '@/types';
+import { SportId, TimeSlot, Venue, VenueType } from '@/types';
 
-const VENUE_TYPES: { id: string; name: string; emoji: string }[] = [
+const VENUE_TYPES: { id: VenueType; name: string; emoji: string }[] = [
   { id: 'field', name: 'Поле', emoji: '🟩' },
   { id: 'gym', name: 'Зал', emoji: '🏋️' },
   { id: 'court', name: 'Корт', emoji: '🎾' },
@@ -21,21 +20,24 @@ const VENUE_TYPES: { id: string; name: string; emoji: string }[] = [
   { id: 'stadium', name: 'Стадион', emoji: '🏟️' },
 ];
 
-const VENUE_SPORTS: { id: string; name: string; emoji: string }[] = [
+const VENUE_SPORTS: { id: Exclude<SportId, 'all'>; name: string; emoji: string }[] = [
   { id: 'football', name: 'Футбол', emoji: '⚽' },
   { id: 'basketball', name: 'Баскет', emoji: '🏀' },
   { id: 'volleyball', name: 'Волей', emoji: '🏐' },
   { id: 'tennis', name: 'Теннис', emoji: '🎾' },
+  { id: 'swimming', name: 'Плавание', emoji: '🏊' },
   { id: 'other', name: 'Другое', emoji: '⚡' },
 ];
 
 export default function OwnerVenuesScreen() {
   const [showAdd, setShowAdd] = useState(false);
+  const [editingVenue, setEditingVenue] = useState<Venue | null>(null);
+  const [scheduleVenue, setScheduleVenue] = useState<Venue | null>(null);
   const { data, isLoading } = useQuery({
     queryKey: ['my-venues'],
     queryFn: () => venuesApi.myVenues(),
   });
-  const venues = (data?.data as any) ?? [];
+  const venues: Venue[] = data?.data ?? [];
 
   return (
     <SafeAreaView style={styles.root}>
@@ -55,7 +57,13 @@ export default function OwnerVenuesScreen() {
           keyExtractor={(item) => String(item.id)}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => <VenueCard venue={item} />}
+          renderItem={({ item }) => (
+            <VenueCard
+              venue={item}
+              onEdit={() => setEditingVenue(item)}
+              onSchedule={() => setScheduleVenue(item)}
+            />
+          )}
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Text style={styles.emptyEmoji}>🏟️</Text>
@@ -67,12 +75,44 @@ export default function OwnerVenuesScreen() {
       )}
 
       <AddVenueModal visible={showAdd} onClose={() => setShowAdd(false)} />
+      {editingVenue && (
+        <EditVenueModal
+          key={editingVenue.id}
+          venue={editingVenue}
+          onClose={() => setEditingVenue(null)}
+        />
+      )}
+      {scheduleVenue && (
+        <ScheduleModal
+          key={scheduleVenue.id}
+          venue={scheduleVenue}
+          onClose={() => setScheduleVenue(null)}
+        />
+      )}
     </SafeAreaView>
   );
 }
 
-function VenueCard({ venue }: { venue: Venue }) {
+function VenueCard({
+  venue,
+  onEdit,
+  onSchedule,
+}: {
+  venue: Venue;
+  onEdit: () => void;
+  onSchedule: () => void;
+}) {
+  const qc = useQueryClient();
+  const { mutate: requestVerification, isPending: isRequestingVerification } = useMutation({
+    mutationFn: () => venuesApi.requestVerification(venue.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['my-venues'] });
+      Toast.show({ type: 'success', text1: 'Заявка отправлена на проверку' });
+    },
+    onError: () => Toast.show({ type: 'error', text1: 'Не удалось отправить заявку' }),
+  });
   const hasImage = venue.images?.length > 0;
+  const isVerified = venue.verification_status === 'verified';
   return (
     <View style={styles.card}>
       {hasImage ? (
@@ -96,31 +136,227 @@ function VenueCard({ venue }: { venue: Venue }) {
         </View>
         <Text style={styles.cardAddress} numberOfLines={1}>{venue.address}</Text>
         <Text style={styles.cardPrice}>{venue.price_per_hour} сом / час</Text>
+        <Text style={[styles.verificationStatus, isVerified ? styles.statusVerified : styles.statusPending]}>
+          {isVerified ? 'Площадка подтверждена' : 'Ожидает проверки'}
+        </Text>
 
         <View style={styles.cardActions}>
-          <TouchableOpacity style={styles.btnEdit}>
+          <TouchableOpacity
+            style={styles.btnEdit}
+            onPress={onEdit}
+          >
             <Edit size={14} color={COLORS.accent} />
             <Text style={styles.btnEditText}>Редактировать</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.btnStats}
-            onPress={() => router.push({ pathname: '/(owner)', params: { venue_id: venue.id } })}
+            onPress={onSchedule}
           >
-            <BarChart2 size={14} color="#000" />
-            <Text style={styles.btnStatsText}>Статистика</Text>
+            <CalendarDays size={14} color="#000" />
+            <Text style={styles.btnStatsText}>Расписание</Text>
           </TouchableOpacity>
         </View>
+        {!isVerified && (
+          <TouchableOpacity
+            style={[styles.verifyBtn, isRequestingVerification && styles.btnDisabled]}
+            onPress={() => requestVerification()}
+            disabled={isRequestingVerification}
+          >
+            <Text style={styles.verifyBtnText}>Отправить на проверку</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
+}
+
+function EditVenueModal({ venue, onClose }: { venue: Venue; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [name, setName] = useState(venue.name);
+  const [type, setType] = useState<VenueType>(venue.type);
+  const [sportIds, setSportIds] = useState<Exclude<SportId, 'all'>[]>(() => {
+    const values = (venue.sport_ids?.filter((id): id is Exclude<SportId, 'all'> => id !== 'all') ?? []);
+    return values.length ? values : [venue.sport_id === 'all' ? 'football' : venue.sport_id];
+  });
+  const [address, setAddress] = useState(venue.address);
+  const [phone, setPhone] = useState(venue.phones?.[0] ?? '');
+  const [city, setCity] = useState(venue.city);
+  const [price, setPrice] = useState(String(venue.price_per_hour || ''));
+  const [link2gis, setLink2gis] = useState(venue.link_2gis ?? '');
+  const [description, setDescription] = useState(venue.description ?? '');
+
+  const { mutate: update, isPending } = useMutation({
+    mutationFn: () => venuesApi.update(venue.id, {
+      name: name.trim(),
+      type,
+      sport_id: sportIds[0],
+      sport_ids: sportIds,
+      address: address.trim(),
+      city: city.trim(),
+      price_per_hour: Number(price) || 0,
+      link_2gis: link2gis.trim(),
+      description: description.trim(),
+      phone: phone.trim(),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['my-venues'] });
+      Toast.show({ type: 'success', text1: 'Площадка обновлена' });
+      onClose();
+    },
+    onError: () => Toast.show({ type: 'error', text1: 'Не удалось сохранить изменения' }),
+  });
+
+  const toggleSport = (id: Exclude<SportId, 'all'>) => {
+    if (sportIds.includes(id)) {
+      if (sportIds.length > 1) setSportIds((current) => current.filter((sport) => sport !== id));
+      return;
+    }
+    setSportIds((current) => [...current, id]);
+  };
+
+  return (
+    <Modal visible animationType="slide" presentationStyle="fullScreen">
+      <KeyboardAvoidingView style={styles.modalRoot} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <SafeAreaView style={styles.modalSafeArea}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Редактировать <Text style={{ color: COLORS.accent }}>площадку</Text></Text>
+            <TouchableOpacity style={styles.modalClose} onPress={onClose}><X size={24} color="#fff" /></TouchableOpacity>
+          </View>
+          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
+            <Text style={styles.fieldLabel}>ТИП ПЛОЩАДКИ</Text>
+            <View style={styles.pillRow}>
+              {VENUE_TYPES.map((item) => (
+                <TouchableOpacity key={item.id} style={[styles.pill, type === item.id && styles.pillActive]} onPress={() => setType(item.id)}>
+                  <Text style={[styles.pillText, type === item.id && styles.pillTextActive]}>{item.emoji} {item.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.fieldLabel}>ВИДЫ СПОРТА</Text>
+            <View style={styles.pillRow}>
+              {VENUE_SPORTS.map((item) => {
+                const active = sportIds.includes(item.id);
+                return (
+                  <TouchableOpacity key={item.id} style={[styles.pill, active && styles.pillActive]} onPress={() => toggleSport(item.id)}>
+                    <Text style={[styles.pillText, active && styles.pillTextActive]}>{item.emoji} {item.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={styles.fieldLabel}>НАЗВАНИЕ</Text>
+            <TextInput style={styles.fieldInput} value={name} onChangeText={setName} placeholder="Название площадки" placeholderTextColor={COLORS.gray[600]} />
+            <Text style={styles.fieldLabel}>АДРЕС</Text>
+            <TextInput style={styles.fieldInput} value={address} onChangeText={setAddress} placeholder="Адрес" placeholderTextColor={COLORS.gray[600]} />
+            <Text style={styles.fieldLabel}>ТЕЛЕФОН</Text>
+            <TextInput style={styles.fieldInput} value={phone} onChangeText={setPhone} placeholder="+996 700 000 000" placeholderTextColor={COLORS.gray[600]} keyboardType="phone-pad" />
+            <Text style={styles.fieldLabel}>ГОРОД</Text>
+            <TextInput style={styles.fieldInput} value={city} onChangeText={setCity} placeholder="Бишкек" placeholderTextColor={COLORS.gray[600]} />
+            <Text style={styles.fieldLabel}>ЦЕНА ЗА ЧАС</Text>
+            <TextInput style={styles.fieldInput} value={price} onChangeText={(value) => setPrice(value.replace(/\D/g, ''))} placeholder="1500" placeholderTextColor={COLORS.gray[600]} keyboardType="number-pad" />
+            <Text style={styles.fieldLabel}>ССЫЛКА 2GIS</Text>
+            <TextInput style={styles.fieldInput} value={link2gis} onChangeText={setLink2gis} placeholder="https://2gis.kg/..." placeholderTextColor={COLORS.gray[600]} autoCapitalize="none" keyboardType="url" />
+            <Text style={styles.fieldLabel}>ОПИСАНИЕ</Text>
+            <TextInput style={[styles.fieldInput, styles.fieldTextarea]} value={description} onChangeText={setDescription} placeholder="Описание площадки" placeholderTextColor={COLORS.gray[600]} multiline textAlignVertical="top" />
+          </ScrollView>
+          <View style={styles.modalFooter}>
+            <TouchableOpacity style={[styles.modalBtn, (!name.trim() || !address.trim() || !sportIds.length || isPending) && styles.modalBtnDisabled]} onPress={() => update()} disabled={!name.trim() || !address.trim() || !sportIds.length || isPending}>
+              {isPending ? <ActivityIndicator color="#000" /> : <Text style={styles.modalBtnText}>СОХРАНИТЬ</Text>}
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+function ScheduleModal({ venue, onClose }: { venue: Venue; onClose: () => void }) {
+  const [date, setDate] = useState(formatDateInput(new Date()));
+  const [startTime, setStartTime] = useState('10:00');
+  const [endTime, setEndTime] = useState('11:00');
+  const [price, setPrice] = useState(String(venue.price_per_hour || ''));
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ['owner-slots', venue.id, date],
+    queryFn: () => venuesApi.slots(venue.id, date),
+  });
+  const slots: TimeSlot[] = data?.data ?? [];
+  const { mutate: addSlot, isPending } = useMutation({
+    mutationFn: () => venuesApi.addSlot(venue.id, { date, start_time: startTime, end_time: endTime, price: Number(price) || 0 }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['owner-slots', venue.id, date] });
+      Toast.show({ type: 'success', text1: 'Слот добавлен' });
+    },
+    onError: () => Toast.show({ type: 'error', text1: 'Не удалось добавить слот' }),
+  });
+  const dates = Array.from({ length: 7 }, (_, index) => {
+    const current = new Date();
+    current.setDate(current.getDate() + index);
+    return formatDateInput(current);
+  });
+
+  return (
+    <Modal visible animationType="slide" presentationStyle="fullScreen">
+      <KeyboardAvoidingView style={styles.modalRoot} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <SafeAreaView style={styles.modalSafeArea}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Расписание <Text style={{ color: COLORS.accent }}>{venue.name}</Text></Text>
+            <TouchableOpacity style={styles.modalClose} onPress={onClose}><X size={24} color="#fff" /></TouchableOpacity>
+          </View>
+          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateRow}>
+              {dates.map((item) => {
+                const active = item === date;
+                return <TouchableOpacity key={item} style={[styles.dateChip, active && styles.pillActive]} onPress={() => setDate(item)}><Text style={[styles.dateChipText, active && styles.pillTextActive]}>{formatDateLabel(item)}</Text></TouchableOpacity>;
+              })}
+            </ScrollView>
+
+            <Text style={styles.fieldLabel}>СЛОТЫ НА {formatDateLabel(date).toUpperCase()}</Text>
+            {isLoading ? <ActivityIndicator color={COLORS.accent} /> : slots.length ? slots.map((slot) => (
+              <View key={slot.id} style={styles.slotCard}>
+                <Text style={styles.slotTime}>{slot.start_time.slice(0, 5)} — {slot.end_time.slice(0, 5)}</Text>
+                <Text style={styles.slotPrice}>{slot.price} сом</Text>
+              </View>
+            )) : <Text style={styles.emptySlots}>На эту дату слотов пока нет</Text>}
+
+            <Text style={styles.fieldLabel}>ДОБАВИТЬ СЛОТ</Text>
+            <View style={styles.timeRow}>
+              <TextInput style={[styles.fieldInput, styles.timeInput]} value={startTime} onChangeText={setStartTime} placeholder="10:00" placeholderTextColor={COLORS.gray[600]} />
+              <Text style={styles.timeSeparator}>—</Text>
+              <TextInput style={[styles.fieldInput, styles.timeInput]} value={endTime} onChangeText={setEndTime} placeholder="11:00" placeholderTextColor={COLORS.gray[600]} />
+            </View>
+            <TextInput style={styles.fieldInput} value={price} onChangeText={(value) => setPrice(value.replace(/\D/g, ''))} placeholder="Цена, сом" placeholderTextColor={COLORS.gray[600]} keyboardType="number-pad" />
+          </ScrollView>
+          <View style={styles.modalFooter}>
+            <TouchableOpacity style={[styles.modalBtn, isPending && styles.modalBtnDisabled]} onPress={() => addSlot()} disabled={isPending}>
+              {isPending ? <ActivityIndicator color="#000" /> : <Text style={styles.modalBtnText}>ДОБАВИТЬ СЛОТ</Text>}
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+function formatDateInput(value: Date): string {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatDateLabel(value: string): string {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
 }
 
 function AddVenueModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const qc = useQueryClient();
   const [name, setName] = useState('');
   const [type, setType] = useState('field');
-  const [sportId, setSportId] = useState('football');
+  const [sportIds, setSportIds] = useState<Exclude<SportId, 'all'>[]>(['football']);
   const [address, setAddress] = useState('');
+  const [phone, setPhone] = useState('');
   const [city, setCity] = useState('Бишкек');
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
@@ -148,8 +384,10 @@ function AddVenueModal({ visible, onClose }: { visible: boolean; onClose: () => 
       const form = new FormData();
       form.append('name', name.trim());
       form.append('type', type);
-      form.append('sport_id', sportId);
+      form.append('sport_id', sportIds[0]);
+      sportIds.forEach((id) => form.append('sport_ids', id));
       form.append('address', address.trim());
+      if (phone.trim()) form.append('phone', phone.trim());
       form.append('city', city.trim() || 'Бишкек');
       form.append('price_per_hour', String(parseFloat(price) || 0));
       if (description.trim()) form.append('description', description.trim());
@@ -168,8 +406,8 @@ function AddVenueModal({ visible, onClose }: { visible: boolean; onClose: () => 
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['my-venues'] });
       Toast.show({ type: 'success', text1: 'Площадка добавлена!' });
-      setName(''); setAddress(''); setPrice(''); setDescription(''); setLink2gis('');
-      setType('field'); setSportId('football'); setCity('Бишкек'); setPhotos([]);
+      setName(''); setAddress(''); setPhone(''); setPrice(''); setDescription(''); setLink2gis('');
+      setType('field'); setSportIds(['football']); setCity('Бишкек'); setPhotos([]);
       onClose();
     },
     onError: (e: any) => {
@@ -233,10 +471,16 @@ function AddVenueModal({ visible, onClose }: { visible: boolean; onClose: () => 
               {VENUE_SPORTS.map((s) => (
                 <TouchableOpacity
                   key={s.id}
-                  style={[styles.pill, sportId === s.id && styles.pillActive]}
-                  onPress={() => setSportId(s.id)}
+                  style={[styles.pill, sportIds.includes(s.id) && styles.pillActive]}
+                  onPress={() => {
+                    if (sportIds.includes(s.id)) {
+                      if (sportIds.length > 1) setSportIds((current) => current.filter((id) => id !== s.id));
+                    } else {
+                      setSportIds((current) => [...current, s.id]);
+                    }
+                  }}
                 >
-                  <Text style={[styles.pillText, sportId === s.id && styles.pillTextActive]}>
+                  <Text style={[styles.pillText, sportIds.includes(s.id) && styles.pillTextActive]}>
                     {s.emoji} {s.name}
                   </Text>
                 </TouchableOpacity>
@@ -261,6 +505,17 @@ function AddVenueModal({ visible, onClose }: { visible: boolean; onClose: () => 
               placeholderTextColor={COLORS.gray[600]}
               value={address}
               onChangeText={setAddress}
+            />
+
+            {/* Phone */}
+            <Text style={styles.fieldLabel}>ТЕЛЕФОН ДЛЯ БРОНИРОВАНИЯ</Text>
+            <TextInput
+              style={styles.fieldInput}
+              placeholder="+996 700 000 000"
+              placeholderTextColor={COLORS.gray[600]}
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
             />
 
             {/* City */}
@@ -413,6 +668,9 @@ const styles = StyleSheet.create({
   ratingText: { fontFamily: FONTS.blackItalic, fontSize: 11, color: '#000' },
   cardAddress: { fontFamily: FONTS.boldItalic, fontSize: 11, color: COLORS.gray[500], marginBottom: 4 },
   cardPrice: { fontFamily: FONTS.blackItalic, fontSize: 13, color: COLORS.accent, marginBottom: SPACING.md },
+  verificationStatus: { fontFamily: FONTS.bold, fontSize: 10, marginBottom: SPACING.md },
+  statusVerified: { color: COLORS.accent },
+  statusPending: { color: '#F7B955' },
   cardActions: { flexDirection: 'row', gap: 10 },
   btnEdit: {
     flex: 1, flexDirection: 'row', justifyContent: 'center',
@@ -420,6 +678,17 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bg, borderRadius: 12,
     borderWidth: 1, borderColor: COLORS.border,
   },
+  btnDisabled: { opacity: 0.55 },
+  verifyBtn: {
+    marginTop: SPACING.sm,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(198,255,0,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(198,255,0,0.35)',
+    alignItems: 'center',
+  },
+  verifyBtnText: { fontFamily: FONTS.blackItalic, fontSize: 10, color: COLORS.accent, textTransform: 'uppercase' },
   btnEditText: { fontFamily: FONTS.blackItalic, fontSize: 10, color: COLORS.accent, textTransform: 'uppercase' },
   btnStats: {
     flex: 1, flexDirection: 'row', justifyContent: 'center',
@@ -434,6 +703,9 @@ const styles = StyleSheet.create({
   emptySubtitle: { fontFamily: FONTS.boldItalic, fontSize: 12, color: COLORS.gray[500], marginTop: 8, textAlign: 'center' },
 
   // Modal
+  modalRoot: { flex: 1, backgroundColor: COLORS.bg },
+  modalSafeArea: { flex: 1 },
+  modalScroll: { flex: 1 },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -457,6 +729,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContent: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.lg, gap: 4 },
+  dateRow: { gap: 8, paddingBottom: SPACING.md },
+  dateChip: {
+    minWidth: 76,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.bgCard,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+  },
+  dateChipText: { fontFamily: FONTS.blackItalic, fontSize: 11, color: COLORS.gray[400], textTransform: 'uppercase' },
+  slotCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: COLORS.bgCard,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 14,
+    marginBottom: 8,
+  },
+  slotTime: { fontFamily: FONTS.blackItalic, fontSize: 16, color: COLORS.white },
+  slotPrice: { fontFamily: FONTS.bold, fontSize: 12, color: COLORS.accent },
+  emptySlots: { fontFamily: FONTS.boldItalic, fontSize: 12, color: COLORS.gray[500], paddingVertical: 14 },
+  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  timeInput: { flex: 1, textAlign: 'center' },
+  timeSeparator: { fontFamily: FONTS.blackItalic, color: COLORS.gray[400], fontSize: 18 },
   modalFooter: {
     paddingHorizontal: SPACING.lg,
     paddingBottom: Platform.OS === 'ios' ? 32 : SPACING.lg,

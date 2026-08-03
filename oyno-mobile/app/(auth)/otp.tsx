@@ -7,10 +7,12 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
 import Toast from 'react-native-toast-message';
 import { authApi } from '@/services/api';
+import { useAuthStore } from '@/stores/authStore';
 import { COLORS, FONTS, RADIUS, SPACING, SHADOW } from '@/constants/theme';
 
 export default function OtpScreen() {
   const { phone } = useLocalSearchParams<{ phone: string }>();
+  const { user, updateUser } = useAuthStore();
   const [code, setCode] = useState('');
   const inputRef = useRef<TextInput>(null);
 
@@ -18,7 +20,8 @@ export default function OtpScreen() {
     mutationFn: () => authApi.verifyOtp(phone ?? '', code),
     onSuccess: ({ data }) => {
       if (data.verified) {
-        router.replace('/(player)');
+        updateUser({ phone_verified: true });
+        router.replace(user?.role === 'venue_owner' ? '/(owner)' : '/(player)');
       } else {
         Toast.show({ type: 'error', text1: 'Неверный код подтверждения' });
         setCode('');

@@ -26,6 +26,7 @@ const SPORT_LABELS: Record<string, string> = {
   basketball: 'Баскетбол',
   volleyball: 'Волейбол',
   tennis: 'Теннис',
+  swimming: 'Плавание',
 };
 
 export default function VenueDetailScreen() {

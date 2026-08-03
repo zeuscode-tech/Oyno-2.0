@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 from django.conf import settings
 
 
@@ -51,20 +51,13 @@ class Booking(models.Model):
     def __str__(self) -> str:
         return f"Бронь #{self.id} — {self.venue.name} [{self.status}]"
 
-    def save(self, *args, **kwargs):
-        is_new = self.pk is None
-        super().save(*args, **kwargs)
-        # Блокируем слот при создании
-        if is_new:
-            self.slot.is_available = False
-            self.slot.save(update_fields=["is_available"])
-
     def cancel(self) -> None:
-        self.status = self.Status.CANCELLED
-        self.save(update_fields=["status"])
-        # Освобождаем слот
-        self.slot.is_available = True
-        self.slot.save(update_fields=["is_available"])
+        with transaction.atomic():
+            slot = type(self.slot).objects.select_for_update().get(pk=self.slot_id)
+            self.status = self.Status.CANCELLED
+            self.save(update_fields=["status", "updated_at"])
+            slot.is_available = True
+            slot.save(update_fields=["is_available"])
 
 
 class BookingRequest(models.Model):

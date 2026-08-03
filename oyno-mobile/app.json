@@ -60,11 +60,19 @@
           }
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "@sentry/react-native"
     ],
     "experiments": {
       "typedRoutes": true
     },
-    "scheme": "oyno"
+    "scheme": "oyno",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "2e710a93-09eb-4517-a729-4feb1614249d"
+      }
+    },
+    "owner": "zeus79"
   }
 }

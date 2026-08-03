@@ -7,7 +7,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 SECRET_KEY = config("SECRET_KEY")
 DEBUG = config("DEBUG", default=False, cast=bool)
 
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = config(
+    "ALLOWED_HOSTS",
+    default="localhost,127.0.0.1",
+    cast=lambda value: [item.strip() for item in value.split(",") if item.strip()],
+)
 
 DJANGO_APPS = [
     "django.contrib.admin",
@@ -36,6 +40,7 @@ LOCAL_APPS = [
     "apps.bookings",
     "apps.payments",
     "apps.notifications",
+    "apps.analytics",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -151,6 +156,12 @@ CORS_ALLOWED_ORIGINS = config(
     cast=lambda v: [s.strip() for s in v.split(",")],
 )
 
+CSRF_TRUSTED_ORIGINS = config(
+    "CSRF_TRUSTED_ORIGINS",
+    default="",
+    cast=lambda value: [item.strip() for item in value.split(",") if item.strip()],
+)
+
 # ── Static / Media ────────────────────────────────────
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
@@ -174,6 +185,7 @@ SPECTACULAR_SETTINGS = {
 SMS_API_URL = config("SMS_API_URL", default="")
 SMS_EMAIL = config("SMS_EMAIL", default="")
 SMS_PASSWORD = config("SMS_PASSWORD", default="")
+SMS_SENDER = config("SMS_SENDER", default="4546")
 
 # ── Firebase ──────────────────────────────────────────
 FIREBASE_CREDENTIALS_PATH = config("FIREBASE_CREDENTIALS_PATH", default="")

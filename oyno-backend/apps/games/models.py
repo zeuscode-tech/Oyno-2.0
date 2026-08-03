@@ -58,6 +58,9 @@ class Game(models.Model):
 
     @property
     def players_joined(self) -> int:
+        prefetched_participants = self._prefetched_objects_cache.get("participants") if hasattr(self, "_prefetched_objects_cache") else None
+        if prefetched_participants is not None:
+            return sum(participant.is_active for participant in prefetched_participants)
         return self.participants.filter(is_active=True).count()
 
     def update_status(self) -> None:
