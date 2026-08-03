@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -12,29 +12,22 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { MapPin, Search } from 'lucide-react-native';
+import MapView, { Marker, Region } from 'react-native-maps';
+import { List, Map, MapPin, Search } from 'lucide-react-native';
 import { venuesApi } from '@/services/api';
 import { useUIStore } from '@/stores/uiStore';
 import { COLORS, FONTS, RADIUS, SPACING, SHADOW } from '@/constants/theme';
-import { SportId, Venue } from '@/types';
-
-const SPORTS: { id: SportId; label: string }[] = [
-  { id: 'all', label: 'Все' },
-  { id: 'football', label: 'Футбол' },
-  { id: 'basketball', label: 'Баскетбол' },
-  { id: 'volleyball', label: 'Волейбол' },
-  { id: 'tennis', label: 'Теннис' },
-];
-
-const SPORT_LABELS: Record<string, string> = {
-  football: 'Футбол',
-  basketball: 'Баскетбол',
-  volleyball: 'Волейбол',
-  tennis: 'Теннис',
-};
+import { Venue } from '@/types';
+import { getSportLabel, SPORT_OPTIONS } from '@/constants/sports';
+import { trackEvent } from '@/services/analytics';
 
 export default function HomeScreen() {
   const { selectedSport, setSelectedSport } = useUIStore();
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+
+  useEffect(() => {
+    trackEvent('venues_viewed', { sport: selectedSport, view: viewMode });
+  }, [selectedSport, viewMode]);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['venues', selectedSport],
@@ -47,7 +40,7 @@ export default function HomeScreen() {
   const venues = data?.data?.results ?? [];
   const subtitle = useMemo(() => {
     if (selectedSport === 'all') return 'Площадки для футбола, баскетбола, волейбола и тенниса';
-    return `Площадки для спорта: ${SPORT_LABELS[selectedSport] ?? 'спорт'}`;
+    return `Площадки для спорта: ${getSportLabel(selectedSport)}`;
   }, [selectedSport]);
 
   return (
@@ -73,7 +66,7 @@ export default function HomeScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filters}
         >
-          {SPORTS.map((sport) => {
+          {SPORT_OPTIONS.map((sport) => {
             const active = selectedSport === sport.id;
             return (
               <TouchableOpacity
@@ -83,7 +76,7 @@ export default function HomeScreen() {
                 activeOpacity={0.85}
               >
                 <Text style={[styles.filterText, active && styles.filterTextActive]}>
-                  {sport.label}
+                  {sport.emoji} {sport.label}
                 </Text>
               </TouchableOpacity>
             );
@@ -92,7 +85,12 @@ export default function HomeScreen() {
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Площадки</Text>
-          <Text style={styles.sectionCount}>{venues.length}</Text>
+          <View style={styles.sectionActions}>
+            <Text style={styles.sectionCount}>{venues.length}</Text>
+            <TouchableOpacity style={styles.viewToggle} onPress={() => setViewMode((mode) => mode === 'list' ? 'map' : 'list')}>
+              {viewMode === 'list' ? <Map size={16} color="#000" /> : <List size={16} color="#000" />}
+            </TouchableOpacity>
+          </View>
         </View>
 
         {isLoading ? (
@@ -106,6 +104,8 @@ export default function HomeScreen() {
               Оставь заявку на любой площадке или выбери другой вид спорта.
             </Text>
           </View>
+        ) : viewMode === 'map' ? (
+          <VenueMap venues={venues} />
         ) : (
           <View style={styles.list}>
             {venues.map((venue) => (
@@ -118,7 +118,40 @@ export default function HomeScreen() {
   );
 }
 
+function VenueMap({ venues }: { venues: Venue[] }) {
+  const firstVenue = venues[0];
+  const initialRegion: Region = {
+    latitude: firstVenue ? Number(firstVenue.lat) : 42.8700,
+    longitude: firstVenue ? Number(firstVenue.lng) : 74.5900,
+    latitudeDelta: 0.08,
+    longitudeDelta: 0.08,
+  };
+
+  return (
+    <View style={styles.mapContainer}>
+      <MapView style={styles.map} initialRegion={initialRegion} showsUserLocation={false}>
+        {venues.map((venue) => (
+          <Marker
+            key={venue.id}
+            coordinate={{ latitude: Number(venue.lat), longitude: Number(venue.lng) }}
+            title={venue.name}
+            description={`${venue.address} · ${venue.price_per_hour} сом/час`}
+            pinColor="#C6FF00"
+            onCalloutPress={() => router.push(`/(player)/venues/${venue.id}`)}
+          />
+        ))}
+      </MapView>
+      <View style={styles.mapHint}>
+        <MapPin size={14} color={COLORS.accent} />
+        <Text style={styles.mapHintText}>Нажми на маркер, чтобы открыть площадку</Text>
+      </View>
+    </View>
+  );
+}
+
 function VenueCard({ venue }: { venue: Venue }) {
+  const sportIds = venue.sport_ids?.length ? venue.sport_ids : [venue.sport_id];
+
   return (
     <TouchableOpacity
       style={styles.card}
@@ -133,7 +166,7 @@ function VenueCard({ venue }: { venue: Venue }) {
         </View>
       )}
       <View style={styles.cardBody}>
-        <Text style={styles.cardSport}>{SPORT_LABELS[venue.sport_id] ?? 'Спорт'}</Text>
+        <Text style={styles.cardSport}>{sportIds.map(getSportLabel).join(' • ')}</Text>
         <Text style={styles.cardTitle} numberOfLines={2}>{venue.name}</Text>
         <View style={styles.cardMeta}>
           <MapPin size={13} color={COLORS.accent} />
@@ -237,6 +270,7 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: SPACING.md,
   },
+  sectionActions: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 8 },
   sectionTitle: {
     fontFamily: FONTS.blackItalic,
     fontSize: 24,
@@ -252,6 +286,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 3,
   },
+  viewToggle: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: COLORS.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapContainer: {
+    marginHorizontal: SPACING.lg,
+    height: 460,
+    borderRadius: RADIUS.xl,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  map: { flex: 1 },
+  mapHint: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    bottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: RADIUS.md,
+    backgroundColor: 'rgba(18,18,18,0.92)',
+  },
+  mapHintText: { flex: 1, fontFamily: FONTS.bold, fontSize: 11, color: COLORS.white },
   loader: { marginTop: 60 },
   list: { paddingHorizontal: SPACING.lg, gap: SPACING.md },
   card: {

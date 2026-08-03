@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
+from django.utils import timezone
 
 from .models import User
 from .serializers import (
@@ -82,7 +83,12 @@ class OTPSendView(APIView):
         serializer = OTPSendSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         phone = serializer.validated_data["phone"]
-        create_otp(phone)
+        try:
+            create_otp(phone)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        except RuntimeError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         return Response({"detail": "Код отправлен."})
 
 
@@ -95,6 +101,7 @@ class OTPVerifyView(APIView):
         phone = serializer.validated_data["phone"]
         code = serializer.validated_data["code"]
         if verify_otp(phone, code):
+            User.objects.filter(phone=phone, is_active=True).update(phone_verified_at=timezone.now())
             return Response({"verified": True})
         return Response({"verified": False, "detail": "Неверный или истёкший код."},
                         status=status.HTTP_400_BAD_REQUEST)
@@ -117,7 +124,12 @@ class PasswordResetRequestView(APIView):
         serializer.is_valid(raise_exception=True)
         phone = serializer.validated_data["phone"]
         from .services import create_otp
-        create_otp(phone)
+        try:
+            create_otp(phone)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        except RuntimeError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         return Response({"detail": "Код отправлен на ваш номер."})
 
 

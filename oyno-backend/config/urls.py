@@ -15,6 +15,7 @@ urlpatterns = [
     path("api/v1/bookings/",      include("apps.bookings.urls")),
     path("api/v1/payments/",      include("apps.payments.urls")),
     path("api/v1/notifications/", include("apps.notifications.urls")),
+    path("api/v1/analytics/",     include("apps.analytics.urls")),
 
     # Owner CRM (stats)
     path("api/v1/owner/",         include("apps.venues.owner_urls")),

@@ -1,0 +1,352 @@
+{
+  "source": "2GIS",
+  "city": "Бишкек",
+  "collected_at": "2026-08-03",
+  "usage_note": "Исследовательские данные. Перед публикацией подтвердить владельца, телефон, цену, расписание и право использования фотографий.",
+  "venues": [
+    {
+      "name": "Динамо",
+      "sport_ids": ["football"],
+      "type": "stadium",
+      "address": "Ташкумырская улица, 2а",
+      "city": "Бишкек",
+      "phones": ["+996558399677"],
+      "rating": 4.6,
+      "reviews_count": 440,
+      "price_note": "В объявлении 2ГИС: аренда футбольного поля до 18:00 — 1000 сом/час.",
+      "source_url": "https://2gis.kg/bishkek/firm/70000001019359641",
+      "photo_urls": [
+        "https://i9.photo.2gis.com/images/branch/0/30258560068605118_e6bb_328x170.jpg"
+      ],
+      "status": "research_pending_owner_confirmation"
+    },
+    {
+      "name": "Arena",
+      "sport_ids": ["football"],
+      "type": "field",
+      "address": "Улица Саякбая Каралаева, 62/2",
+      "city": "Бишкек",
+      "phones": ["+996703210888", "+996558399677"],
+      "phone_note": "В карточке 2ГИС отображаются два разных номера; подтвердить у владельца.",
+      "rating": 4.7,
+      "reviews_count": 1297,
+      "source_url": "https://2gis.kg/bishkek/firm/70000001026061730",
+      "photo_urls": [
+        "https://i8.photo.2gis.com/photo-gallery/7288d159-258b-4852-837a-ba746e1a73d7_328x170.jpg",
+        "https://i8.photo.2gis.com/images/branch/0/30258560054018431_bfd7_328x170.jpg"
+      ],
+      "status": "research_pending_owner_confirmation"
+    },
+    {
+      "name": "Bilimkana Sport Space",
+      "sport_ids": ["football", "volleyball", "basketball"],
+      "type": "gym",
+      "address": "Улица Бейшена Егимбаева, 145",
+      "city": "Бишкек",
+      "phones": ["+996770004680"],
+      "rating": 4.7,
+      "reviews_count": 368,
+      "description": "В 2ГИС указаны футбол, волейбол, баскетбол и единоборства; также зал для танцев и йоги.",
+      "source_url": "https://2gis.kg/bishkek/firm/70000001064898176",
+      "photo_urls": [
+        "https://i5.photo.2gis.com/images/branch/0/30258560100157582_0c13_328x170.jpg"
+      ],
+      "status": "research_pending_owner_confirmation"
+    },
+    {
+      "name": "Алга",
+      "sport_ids": ["football"],
+      "type": "stadium",
+      "address": "Улица Усенбаева, 200/1",
+      "city": "Бишкек",
+      "rating": 4.7,
+      "reviews_count": 235,
+      "source_url": "https://2gis.kg/bishkek/firm/70000001103158500",
+      "status": "research_pending_owner_confirmation"
+    },
+    {
+      "name": "Muras United",
+      "sport_ids": ["football"],
+      "type": "stadium",
+      "address": "Улица Алтын Бешик, 77а",
+      "city": "Бишкек",
+      "rating": 4.8,
+      "reviews_count": 443,
+      "source_url": "https://2gis.kg/bishkek/firm/70000001092764515",
+      "status": "research_pending_owner_confirmation"
+    },
+    {
+      "name": "Дарбаза",
+      "sport_ids": ["football"],
+      "type": "field",
+      "address": "Улица Тимура Фрунзе, 126",
+      "city": "Бишкек",
+      "rating": 4.8,
+      "reviews_count": 474,
+      "source_url": "https://2gis.kg/bishkek/firm/70000001039547773",
+      "status": "research_pending_owner_confirmation"
+    },
+    {
+      "name": "T-club",
+      "sport_ids": ["tennis"],
+      "type": "court",
+      "address": "Улица Токтогула, 75/3",
+      "city": "Бишкек",
+      "district": "Свердловский район",
+      "lat": 42.872803,
+      "lng": 74.614364,
+      "phones": ["+996770891464", "+996755392483"],
+      "phone_note": "В карточке 2ГИС отображаются два разных номера; подтвердить у владельца.",
+      "description": "В карточке указаны теннисный корт, бассейн и спортивные секции; абонемент от 5000 сом.",
+      "source_url": "https://2gis.kg/bishkek/firm/70000001022124541",
+      "status": "research_pending_owner_confirmation"
+    },
+    {
+      "name": "Ervin Tennis School",
+      "sport_ids": ["tennis"],
+      "type": "court",
+      "address": "Улица Исы Ахунбаева, 97Б",
+      "city": "Бишкек",
+      "district": "Октябрьский район",
+      "lat": 42.844336,
+      "lng": 74.615021,
+      "phones": ["+996995176762", "+996755392483"],
+      "phone_note": "В карточке 2ГИС отображаются два разных номера; подтвердить у владельца.",
+      "description": "В карточке указаны теннисный клуб, академия тенниса и бассейн с 5 дорожками.",
+      "source_url": "https://2gis.kg/bishkek/firm/70000001023342613",
+      "status": "research_pending_owner_confirmation"
+    },
+    {
+      "name": "Жаштык",
+      "sport_ids": ["football"],
+      "type": "stadium",
+      "address": "Улица Тоголок Молдо, 17/7",
+      "city": "Бишкек",
+      "district": "Первомайский район",
+      "phones": ["+996999571010", "+996558399677"],
+      "phone_note": "В карточке есть прямой номер филиала и общий контакт 2ГИС; подтвердить основной.",
+      "rating": 4.7,
+      "reviews_count": 2584,
+      "description": "Стадион; в карточке также указаны футбольные секции.",
+      "source_url": "https://2gis.kg/bishkek/firm/70000001110211192",
+      "photo_urls": [
+        "https://i1.photo.2gis.com/video-gallery/354f1ee2-3535-44d5-91fe-086c9fbabe40_328x170.jpg"
+      ],
+      "status": "research_pending_owner_confirmation"
+    },
+    {
+      "name": "Душанбинка",
+      "sport_ids": ["football"],
+      "type": "field",
+      "address": "Улица Токтоналиева, 84/2",
+      "city": "Бишкек",
+      "district": "Октябрьский район",
+      "phones": ["+996555556116", "+996558399677"],
+      "phone_note": "В карточке есть прямой номер и общий контакт 2ГИС; подтвердить основной.",
+      "rating": 4.7,
+      "reviews_count": 763,
+      "description": "Мини-футбольное поле.",
+      "source_url": "https://2gis.kg/bishkek/firm/70000001026868720",
+      "status": "research_pending_owner_confirmation"
+    },
+    {
+      "name": "Онол",
+      "sport_ids": ["football", "volleyball", "tennis"],
+      "type": "gym",
+      "address": "Улица Кара-Кужур, 88",
+      "city": "Бишкек",
+      "district": "Арча-Бешик ж/м, Ленинский район",
+      "phones": ["+996501270919", "+996770009442", "+996558399677"],
+      "phone_note": "2ГИС показывает контакт объекта, контакт связанного волейбольного зала и общий рекламный номер.",
+      "rating": 3.9,
+      "reviews_count": 450,
+      "description": "В карточке связаны волейбольный зал и спортивные направления; перед публикацией разделить филиалы.",
+      "source_url": "https://2gis.kg/bishkek/firm/70000001057029618",
+      "status": "research_pending_owner_confirmation"
+    },
+    {
+      "name": "Archa Arena",
+      "sport_ids": ["volleyball", "football"],
+      "type": "gym",
+      "address": "Улица Жайыл Баатыра, 242",
+      "city": "Бишкек",
+      "district": "Арча-Бешик ж/м, Ленинский район",
+      "phones": ["+996507000027", "+996558399677"],
+      "phone_note": "В карточке есть прямой номер и отдельный рекламный контакт по аренде футбольных полей.",
+      "rating": 4.9,
+      "reviews_count": 351,
+      "description": "Волейбольные залы; также указаны бадминтон, футбол и единоборства.",
+      "source_url": "https://2gis.kg/bishkek/firm/70000001100797214",
+      "photo_urls": [
+        "https://i9.photo.2gis.com/photo-gallery/23641661-9c78-42d9-9131-a7d61df9222a_328x170.jpg"
+      ],
+      "status": "research_pending_owner_confirmation"
+    },
+    {
+      "name": "Алай",
+      "sport_ids": ["volleyball", "football"],
+      "type": "gym",
+      "address": "Улица Месароша, 100/2",
+      "city": "Бишкек",
+      "district": "Первомайский район",
+      "phones": ["+996772752379", "+996558399677"],
+      "phone_note": "В карточке есть прямой номер и отдельный рекламный контакт по аренде футбольных полей.",
+      "rating": 4.8,
+      "reviews_count": 482,
+      "description": "Спортивный комплекс; в карточке указаны волейбольный зал и футбольное поле.",
+      "source_url": "https://2gis.kg/bishkek/firm/70000001033197980",
+      "photo_urls": [
+        "https://i8.photo.2gis.com/images/geo/0/30258560100064929_718b_328x170.jpg",
+        "https://i1.photo.2gis.com/images/branch/0/30258560073051367_8dca_328x170.jpg"
+      ],
+      "status": "research_pending_owner_confirmation"
+    },
+    {
+      "name": "Курама",
+      "sport_ids": ["volleyball"],
+      "type": "gym",
+      "address": "Киргизская улица, 73",
+      "city": "Бишкек",
+      "district": "Нижняя Ала-Арча с., Свердловский район",
+      "phones": ["+996505605790", "+996558399677"],
+      "phone_note": "В карточке есть прямой номер и отдельный рекламный контакт 2ГИС.",
+      "rating": 4.9,
+      "reviews_count": 535,
+      "description": "Спортивный зал с волейбольным залом.",
+      "source_url": "https://2gis.kg/bishkek/firm/70000001090721842",
+      "status": "research_pending_owner_confirmation"
+    },
+    {
+      "name": "Зенит",
+      "sport_ids": ["volleyball"],
+      "type": "gym",
+      "address": "Улица Крупской, 117в",
+      "city": "Бишкек",
+      "district": "Новопавловка с., Ленинский район",
+      "phones": ["+996501223883", "+996558399677"],
+      "phone_note": "В карточке есть прямой номер и отдельный рекламный контакт 2ГИС.",
+      "rating": 4.7,
+      "reviews_count": 771,
+      "description": "Волейбольный зал; в карточке указано направление волейбола.",
+      "source_url": "https://2gis.kg/bishkek/firm/70000001066292582",
+      "photo_urls": [
+        "https://i9.photo.2gis.com/images/branch/0/30258560101081535_c70f_328x170.jpg",
+        "https://i1.photo.2gis.com/photo-gallery/7cdde3b2-b81a-4364-8bb5-2cd14f546418_328x170.jpg"
+      ],
+      "status": "research_pending_owner_confirmation"
+    },
+    {
+      "name": "Динамо — волейбольный зал",
+      "sport_ids": ["volleyball"],
+      "type": "gym",
+      "address": "Советская улица, 222",
+      "city": "Бишкек",
+      "district": "Новопавловка с., Ленинский район",
+      "phones": ["+996703227311", "+996558399677"],
+      "phone_note": "В карточке есть прямой номер и отдельный рекламный контакт 2ГИС.",
+      "rating": 4.8,
+      "reviews_count": 261,
+      "description": "Волейбольный зал.",
+      "source_url": "https://2gis.kg/bishkek/firm/70000001109044073",
+      "photo_urls": [
+        "https://i9.photo.2gis.com/photo-gallery/47216979-f2ba-4802-af48-d014cd55d487_328x170.jpg",
+        "https://i1.photo.2gis.com/video-gallery/c9f0a143-5819-4227-84e9-661316808d41_328x170.jpg"
+      ],
+      "status": "research_pending_owner_confirmation"
+    },
+    {
+      "name": "Bilimkana Arena",
+      "sport_ids": ["football", "volleyball", "basketball"],
+      "type": "gym",
+      "address": "Проспект Чынгыза Айтматова, 1а",
+      "city": "Бишкек",
+      "district": "Ленинский район",
+      "phones": ["+996555564564", "+996770004680", "+996558399677"],
+      "phone_note": "В карточке есть контакт филиала, связанный контакт Bilimkana и общий рекламный номер.",
+      "rating": 4.5,
+      "reviews_count": 498,
+      "description": "Футбол, волейбол, баскетбол, плавание и другие спортивные направления.",
+      "source_url": "https://2gis.kg/bishkek/firm/70000001064028114",
+      "photo_urls": [
+        "https://i9.photo.2gis.com/photo-gallery/0422d786-b7bc-49a0-8b4e-e9bfa4ac6722_328x170.jpg",
+        "https://i4.photo.2gis.com/photo-gallery/ee834d0b-518c-4e3d-9c9c-0169ae1db13d_328x170.jpg"
+      ],
+      "status": "research_pending_owner_confirmation"
+    },
+    {
+      "name": "Чемпион",
+      "sport_ids": ["football"],
+      "type": "gym",
+      "address": "Бульвар Молодой Гвардии, 124Б",
+      "city": "Бишкек",
+      "district": "Маевка с., Первомайский район",
+      "phones": ["+996705275006", "+996558399677"],
+      "phone_note": "В карточке есть прямой номер и отдельный рекламный контакт 2ГИС.",
+      "rating": 4.7,
+      "reviews_count": 545,
+      "description": "В карточке указаны футбольное поле, мини-футбол и спортивный зал.",
+      "source_url": "https://2gis.kg/bishkek/firm/70000001066573628",
+      "photo_urls": [
+        "https://i5.photo.2gis.com/photo-gallery/00d71f65-e26f-4e5d-984e-663b60f89ed7_328x170.jpg",
+        "https://i2.photo.2gis.com/photo-gallery/3deb6de2-93a4-4981-94c9-5490eea8df83_328x170.jpg"
+      ],
+      "status": "research_pending_owner_confirmation"
+    },
+    {
+      "name": "Family Sport",
+      "sport_ids": ["basketball", "football"],
+      "type": "gym",
+      "address": "Улица Исы Ахунбаева, 2/4",
+      "city": "Бишкек",
+      "district": "Кок-Жар ж/м, Октябрьский район",
+      "phones": ["+996312517154", "+996558399152"],
+      "phone_note": "В карточке указаны несколько связанных спортивных контактов; подтвердить номер для бронирования площадки.",
+      "rating": 4.2,
+      "reviews_count": 376,
+      "description": "В карточке указаны баскетбол и футбол, бассейн и спортивные секции.",
+      "source_url": "https://2gis.kg/bishkek/firm/70000001019332338",
+      "photo_urls": [
+        "https://i4.photo.2gis.com/photo-gallery/afe888a1-2382-489d-8f93-f99973c791dd_328x170.jpg",
+        "https://i1.photo.2gis.com/video-gallery/a6eefcb3-10f5-4d4f-9810-df82a313ab48_328x170.jpg"
+      ],
+      "status": "research_pending_owner_confirmation"
+    },
+    {
+      "name": "Mr. Padel",
+      "sport_ids": ["tennis"],
+      "type": "court",
+      "address": "Аалы Токомбаева улица, 52в/7",
+      "city": "Бишкек",
+      "district": "Октябрьский район",
+      "phones": ["+996550032726"],
+      "rating": 5.0,
+      "reviews_count": 12,
+      "description": "Падел-корты; добавить в раздел тенниса с отдельной пометкой «падел». Возможны разовые посещения.",
+      "source_url": "https://2gis.kg/bishkek/firm/70000001115651294",
+      "photo_urls": [
+        "https://i8.photo.2gis.com/photo-gallery/317011a5-620f-482a-b34b-7a14647ae732_328x170.jpg",
+        "https://i5.photo.2gis.com/photo-gallery/b43dc1d9-cdb4-4865-bfee-94c69ffd7ed7_328x170.jpg"
+      ],
+      "status": "research_pending_owner_confirmation"
+    },
+    {
+      "name": "Теннис Тайм",
+      "sport_ids": ["tennis"],
+      "type": "court",
+      "address": "Улица Льва Толстого, 126 блок D",
+      "city": "Бишкек",
+      "district": "Ленинский район",
+      "phones": ["+996999963096", "+996755392483"],
+      "phone_note": "В карточке есть прямой номер и общий контакт 2ГИС; подтвердить номер площадки.",
+      "rating": 5.0,
+      "reviews_count": 5,
+      "description": "Теннисный корт; в карточке указаны связанные фитнес-услуги и несколько общих контактов.",
+      "source_url": "https://2gis.kg/bishkek/firm/70000001116521807",
+      "photo_urls": [
+        "https://i0.photo.2gis.com/photo-gallery/024228e2-369c-44bb-add4-63ffa3dc7649_328x170.jpg",
+        "https://i9.photo.2gis.com/photo-gallery/52d07fd8-eab5-4556-b169-f5fdcd0c65be_328x170.jpg"
+      ],
+      "status": "research_pending_owner_confirmation"
+    }
+  ]
+}

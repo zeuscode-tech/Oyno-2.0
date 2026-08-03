@@ -1,10 +1,11 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
-import { AuthTokens, User, Game, Venue, Booking, ChatRoom, ChatMessage,
+import { AuthTokens, User, Game, Venue, VenueUpdatePayload, Booking, ChatRoom, ChatMessage,
   DashboardStats, TimeSlot, CreateGamePayload, CreateBookingPayload,
   PaginatedResponse, LoginPayload, RegisterPayload, PaymentMethod, SportId,
   BookingRequest, CreateBookingRequestPayload, BookingRequestStatus } from '@/types';
 import { API_BASE_URL } from '@/services/network';
 import { appStorage } from '@/services/storage';
+import { useAuthStore } from '@/stores/authStore';
 
 // ── Config ─────────────────────────────────────────
 export const BASE_URL = API_BASE_URL;
@@ -50,8 +51,7 @@ api.interceptors.response.use(
         original.headers.Authorization = `Bearer ${data.access}`;
         return api(original);
       } catch {
-        await appStorage.deleteItem(TOKEN_KEY);
-        // Redirect to login handled by router
+        await useAuthStore.getState().logout();
       }
     }
     return Promise.reject(error);
@@ -140,19 +140,35 @@ export const venuesApi = {
     }),
 
   createVenue: (data: {
-    name: string; type: string; sport_id: string;
+    name: string; type: string; sport_id: string; sport_ids?: string[];
     address: string; city: string; price_per_hour: number;
     description?: string;
   }) => api.post<Venue>('/venues/', data),
 
-  update: (id: number, data: Partial<Venue>) =>
+  update: (id: number, data: VenueUpdatePayload) =>
     api.patch<Venue>(`/venues/${id}/`, data),
+
+  requestVerification: (id: number) =>
+    api.post<Venue>(`/venues/${id}/request-verification/`),
+
+  addImages: (id: number, form: FormData) =>
+    api.post<Venue>(`/venues/${id}/images/`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+
+  addSlot: (id: number, data: { date: string; start_time: string; end_time: string; price: number }) =>
+    api.post<TimeSlot>(`/venues/${id}/slots/`, data),
 
   reviews: (id: number) =>
     api.get<{ id: number; rating: number; text: string; author_name: string; created_at: string }[]>(`/venues/${id}/reviews/`),
 
   addReview: (id: number, data: { rating: number; text?: string }) =>
     api.post<{ id: number; rating: number; text: string; author_name: string; created_at: string }>(`/venues/${id}/reviews/`, data),
+};
+
+export const analyticsApi = {
+  track: (data: { event_name: string; properties?: Record<string, string | number | boolean>; platform?: string; app_version?: string }) =>
+    api.post('/analytics/events/', data),
 };
 
 // ── Bookings ────────────────────────────────────────

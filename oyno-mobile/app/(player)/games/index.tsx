@@ -13,16 +13,9 @@ import { gamesApi } from '@/services/api';
 import { COLORS, FONTS, RADIUS, SPACING, SHADOW } from '@/constants/theme';
 import { Game } from '@/types';
 import { t } from '@/constants/i18n';
+import { SPORT_LABELS, SPORT_OPTIONS } from '@/constants/sports';
 
 type Tab = 'all' | 'upcoming' | 'history';
-const SPORT_FILTERS = ['Все', 'Футбол', 'Баскетбол', 'Волейбол', 'Теннис'];
-
-const SPORT_NAME_TO_ID: Record<string, string> = {
-  'Футбол': 'football',
-  'Баскетбол': 'basketball',
-  'Волейбол': 'volleyball',
-  'Теннис': 'tennis',
-};
 
 export default function GamesScreen() {
   const [tab, setTab] = useState<Tab>('all');
@@ -56,7 +49,9 @@ export default function GamesScreen() {
         const matchSearch =
           g.title.toLowerCase().includes(search.toLowerCase()) ||
           g.venue?.name.toLowerCase().includes(search.toLowerCase());
-        const matchSport = sportFilter === 'Все' || g.sport_id === SPORT_NAME_TO_ID[sportFilter];
+        const matchSport = sportFilter === 'Все' || (
+          g.sport_id !== 'all' && SPORT_LABELS[g.sport_id] === sportFilter
+        );
         return matchSearch && matchSport;
       })
       .sort((a, b) => new Date(a.date_time).getTime() - new Date(b.date_time).getTime());
@@ -87,14 +82,14 @@ export default function GamesScreen() {
           <View style={styles.filterIcon}>
             <Filter size={14} color={COLORS.gray[500]} />
           </View>
-          {SPORT_FILTERS.map((s) => (
+          {SPORT_OPTIONS.map((s) => (
             <TouchableOpacity
-              key={s}
-              style={[styles.filterBtn, sportFilter === s && styles.filterBtnActive]}
-              onPress={() => setSportFilter(s)}
+              key={s.id}
+              style={[styles.filterBtn, sportFilter === s.label && styles.filterBtnActive]}
+              onPress={() => setSportFilter(s.label)}
             >
-              <Text style={[styles.filterBtnText, sportFilter === s && styles.filterBtnTextActive]}>
-                {s}
+              <Text style={[styles.filterBtnText, sportFilter === s.label && styles.filterBtnTextActive]}>
+                {s.emoji} {s.label}
               </Text>
             </TouchableOpacity>
           ))}

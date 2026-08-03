@@ -9,6 +9,7 @@ export interface User {
   name: string;
   username?: string;
   phone: string;
+  phone_verified?: boolean;
   avatar: string | null;
   city: string;
   bio: string;
@@ -40,7 +41,7 @@ export interface RegisterPayload {
 }
 
 // ── Sports ───────────────────────────────────────────
-export type SportId = 'football' | 'basketball' | 'volleyball' | 'tennis' | 'all';
+export type SportId = 'football' | 'basketball' | 'volleyball' | 'tennis' | 'swimming' | 'other' | 'all';
 
 export interface Sport {
   id: SportId;
@@ -95,6 +96,7 @@ export interface Venue {
   name: string;
   type: VenueType;
   sport_id: SportId;
+  sport_ids?: SportId[];
   address: string;
   city: string;
   lat: number;
@@ -105,6 +107,8 @@ export interface Venue {
   images: string[];
   is_active: boolean;
   link_2gis?: string;
+  phones?: string[];
+  verification_status?: 'pending_verification' | 'verified' | 'rejected';
   owner_id: number;
   description?: string;
   amenities?: string[];
@@ -120,10 +124,24 @@ export interface WorkingHours {
 export interface TimeSlot {
   id: number;
   venue_id: number;
+  date: string;
   start_time: string;
   end_time: string;
   is_available: boolean;
   price: number;
+}
+
+export interface VenueUpdatePayload {
+  name?: string;
+  type?: VenueType;
+  sport_id?: Exclude<SportId, 'all'>;
+  sport_ids?: Exclude<SportId, 'all'>[];
+  address?: string;
+  city?: string;
+  price_per_hour?: number;
+  description?: string;
+  link_2gis?: string;
+  phone?: string;
 }
 
 // ── Bookings ─────────────────────────────────────────
@@ -143,7 +161,8 @@ export interface Booking {
 export interface CreateBookingPayload {
   venue_id: number;
   slot_id: number;
-  payment_method_id: string;
+  payment_method_id?: string;
+  notes?: string;
 }
 
 export type BookingRequestStatus = 'new' | 'contacted' | 'confirmed' | 'cancelled';

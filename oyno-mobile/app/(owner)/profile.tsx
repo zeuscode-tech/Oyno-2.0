@@ -1,11 +1,19 @@
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { User, LogOut, ChevronRight, Gamepad2 } from 'lucide-react-native';
+import { useMutation } from '@tanstack/react-query';
+import Toast from 'react-native-toast-message';
+import { authApi } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 import { COLORS, FONTS, RADIUS, SPACING, SHADOW } from '@/constants/theme';
 
 export default function OwnerProfileScreen() {
   const { user, logout, setActiveRole } = useAuthStore();
+  const { mutate: sendPhoneCode, isPending: isSendingCode } = useMutation({
+    mutationFn: () => authApi.sendOtp(user?.phone ?? ''),
+    onSuccess: () => router.push({ pathname: '/(auth)/otp', params: { phone: user?.phone ?? '' } }),
+    onError: () => Toast.show({ type: 'error', text1: 'Не удалось отправить SMS-код' }),
+  });
 
   const handleSwitchToPlayer = () => {
     setActiveRole('player');
@@ -30,8 +38,17 @@ export default function OwnerProfileScreen() {
           <Text style={styles.userName}>{user?.name ?? '—'}</Text>
           <Text style={styles.userRole}>ВЛАДЕЛЕЦ ПЛОЩАДКИ</Text>
           <Text style={styles.userPhone}>{user?.phone}</Text>
+          <Text style={[styles.phoneStatus, user?.phone_verified ? styles.phoneVerified : styles.phonePending]}>
+            {user?.phone_verified ? 'Номер подтверждён' : 'Номер не подтверждён'}
+          </Text>
         </View>
       </View>
+
+      {!user?.phone_verified && (
+        <TouchableOpacity style={styles.verifyPhoneBtn} onPress={() => sendPhoneCode()} disabled={isSendingCode}>
+          <Text style={styles.verifyPhoneText}>{isSendingCode ? 'Отправляем код…' : 'Подтвердить номер телефона'}</Text>
+        </TouchableOpacity>
+      )}
 
       {/* Menu */}
       <View style={styles.menu}>
@@ -123,6 +140,18 @@ const styles = StyleSheet.create({
     color: COLORS.gray[500],
     marginTop: 4,
   },
+  phoneStatus: { fontFamily: FONTS.bold, fontSize: 11, marginTop: 5 },
+  phoneVerified: { color: COLORS.accent },
+  phonePending: { color: '#F7B955' },
+  verifyPhoneBtn: {
+    backgroundColor: COLORS.accent,
+    borderRadius: RADIUS.xl,
+    paddingVertical: 15,
+    alignItems: 'center',
+    marginBottom: SPACING.lg,
+    ...SHADOW.accent,
+  },
+  verifyPhoneText: { fontFamily: FONTS.blackItalic, fontSize: 12, color: '#000', textTransform: 'uppercase' },
 
   menu: { gap: 12 },
   menuItem: {

@@ -5,13 +5,14 @@ from .models import User
 
 class UserSerializer(serializers.ModelSerializer):
     avatar = serializers.SerializerMethodField()
+    phone_verified = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             "id", "name", "username", "phone", "avatar", "city", "bio",
             "role", "rank", "skill_level", "main_sport",
-            "rating", "reliability", "matches_played", "date_joined",
+            "rating", "reliability", "matches_played", "date_joined", "phone_verified",
         ]
         read_only_fields = ["id", "date_joined", "rating", "reliability", "matches_played", "rank"]
 
@@ -20,6 +21,9 @@ class UserSerializer(serializers.ModelSerializer):
             request = self.context.get("request")
             return request.build_absolute_uri(obj.avatar.url) if request else obj.avatar.url
         return None
+
+    def get_phone_verified(self, obj: User) -> bool:
+        return obj.phone_verified_at is not None
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -39,6 +43,13 @@ class RegisterSerializer(serializers.ModelSerializer):
         existing = User.objects.filter(phone=value).first()
         if existing and existing.role == role:
             raise serializers.ValidationError("Этот номер уже зарегистрирован для данной роли.")
+        return value
+
+    def validate_role(self, value: str) -> str:
+        if value == User.Role.VENUE_OWNER:
+            raise serializers.ValidationError(
+                "Регистрация владельца площадки проходит через проверку команды OYNO."
+            )
         return value
 
     def create(self, validated_data: dict) -> User:

@@ -3,6 +3,11 @@ from django.conf import settings
 
 
 class Venue(models.Model):
+    class VerificationStatus(models.TextChoices):
+        PENDING = "pending_verification", "Ожидает проверки"
+        VERIFIED = "verified", "Проверена"
+        REJECTED = "rejected", "Отклонена"
+
     class VenueType(models.TextChoices):
         STADIUM = "stadium", "Стадион"
         GYM = "gym", "Зал"
@@ -25,7 +30,9 @@ class Venue(models.Model):
     )
     name = models.CharField(max_length=150)
     type = models.CharField(max_length=20, choices=VenueType.choices, default=VenueType.FIELD)
+    # Оставляем sport_id для совместимости с играми и старым API.
     sport_id = models.CharField(max_length=20, choices=SportId.choices, default=SportId.FOOTBALL)
+    sport_ids = models.JSONField(default=list, blank=True)
     address = models.CharField(max_length=255)
     city = models.CharField(max_length=100, default="Бишкек")
     lat = models.DecimalField(max_digits=10, decimal_places=7, default=42.8700)
@@ -35,6 +42,14 @@ class Venue(models.Model):
     price_per_hour = models.DecimalField(max_digits=8, decimal_places=2, default=0)
     description = models.TextField(blank=True)
     link_2gis = models.URLField("Ссылка на 2ГИС", max_length=500, blank=True)
+    source_phones = models.JSONField(default=list, blank=True)
+    source_photo_urls = models.JSONField(default=list, blank=True)
+    source_phone_note = models.TextField(blank=True, default="")
+    verification_status = models.CharField(
+        max_length=30,
+        choices=VerificationStatus.choices,
+        default=VerificationStatus.PENDING,
+    )
     amenities = models.JSONField(default=list)  # ["Душевые", "Парковка", ...]
     working_hours = models.JSONField(
         default=dict  # {"open": "08:00", "close": "22:00", "days": [1,2,3,4,5,6,7]}
@@ -47,6 +62,7 @@ class Venue(models.Model):
         verbose_name_plural = "Площадки"
         indexes = [
             models.Index(fields=["city", "sport_id"]),
+            models.Index(fields=["city", "verification_status"], name="venues_city_verif_idx"),
             models.Index(fields=["owner"]),
         ]
 
@@ -102,4 +118,3 @@ class VenueReview(models.Model):
         self.venue.rating = round(agg["avg"] or 0, 1)
         self.venue.reviews_count = VenueReview.objects.filter(venue=self.venue).count()
         self.venue.save(update_fields=["rating", "reviews_count"])
-    
